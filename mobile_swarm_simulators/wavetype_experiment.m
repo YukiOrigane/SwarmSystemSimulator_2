@@ -5,7 +5,7 @@
 
 %% 最初に1回だけ回すもの．おまじない
 addpath(genpath("../../../SwarmSystemSimulator_2/"))    % パスを通す
-simulation = SwarmWithWaveInteractionSimulation();                 % オブジェクトの定義
+simulation = SwarmWithWaveInteractionSimple();                 % オブジェクトの定義
 simulation.setFigureProperty("large");                  % 描画の基本設定を変更
 
 %% 誘導場の生成
@@ -17,15 +17,18 @@ simulation = simulation.setParam("placement_file","setting_files/init_conditions
 %simulation = simulation.setParam("placement_file","setting_files/init_conditions/round_1.m");   % パラメタ変更
 %simulation = simulation.setParam("environment_file","setting_files/environments/narrow_space_hosome_w_4.m");   % パラメタ変更
 %simulation = simulation.setParam("placement_file","setting_files/init_conditions/narrow_20.m");   % パラメタ変更
+%simulation = simulation.setParam("environment_file","setting_files/environments/free.m");   % パラメタ変更
+%simulation = simulation.setParam("placement_file","setting_files/init_conditions/narrow_20.m");   % パラメタ変更
 % COS %
-simulation.cos = simulation.cos.setParam("kappa",80);
+simulation.cos = simulation.cos.setParam("kappa",400);
 simulation.cos = simulation.cos.setParam("gamma",0);
 simulation.cos = simulation.cos.setParam("do_estimate",true);
 simulation.cos = simulation.cos.setParam("time_histry",256);
-simulation.cos = simulation.cos.setParam("power_threshold",10^-8);
+simulation.cos = simulation.cos.setParam("power_threshold",10^-7); % 10^-8
+simulation.cos = simulation.cos.setParam("prominence_threshold",10^-2); % 10^-8
 simulation.cos = simulation.cos.setParam("peak_memory_num",1);
 simulation.cos = simulation.cos.setParam("deadlock_usepower",true);
-simulation.cos = simulation.cos.setParam("is_normalize",false);  % 相互作用の正規化を行う
+simulation.cos = simulation.cos.setParam("is_normalize",true);  % 相互作用の正規化を行う
 %simulation.cbf = simulation.cbf.disable();
 % 停止検知 %
 simulation = simulation.setParam("stop_timehistry",256);
@@ -34,7 +37,7 @@ simulation = simulation.setParam("stop_threshold",10^-3);
 simulation = simulation.setParam("kp",8);   % Swarm : 勾配追従力ゲイン
 simulation = simulation.setParam("kf",0);  % Swarm : 群形成力ゲイン
 simulation = simulation.setParam("kd",10);   % Swarm : 粘性ゲイン
-simulation = simulation.setParam("Nt",3000);
+simulation = simulation.setParam("Nt",15000);
 simulation = simulation.setParam("is_debug_view",false);
 simulation = simulation.setParam("initial_pos_variance", 0);
 %simulation = simulation.setParam("attract_force_type", "linear_fbx");
@@ -63,18 +66,18 @@ simulation = simulation.simulate(); % シミュレーションの実施
 %% 描画とか
 figure
 simulation.edgeDeadlockPlot(1,2);
-simulation.placePlot(2900,true);
+simulation.placePlot(12000,true);
 % simulation.cos = simulation.cos.plot(true);
 % simulation = simulation.generateMovieEstimate([],10);
-% simulation = simulation.generateMovieTrip();
+% simulation = simulation.generateMovieTrip("movie.mp4",20);
 simulation = simulation.generateMovieEstimate();
 simulation = simulation.setParam("is_debug_view",true);
-simulation = simulation.calcControlInput(750);
+simulation = simulation.calcControlInput(8000);
 simulation.cos.relativePositionEstimate(750,[8,9,10]);  % 推定デバッグ表示
 simulation.cos.peakAndFreqPlot([8,9,10]);   % エージェント毎ピーク履歴
 simulation.cos.peakAndFreqPlot2([1,5:20]);   % モード毎ピーク履歴
 % simulation.cos.spectrumPlot(1500,8);   % 特定時刻スペクトラムプロット
-% simulation.cos.generateSpectrumMovie();
+% simulation.cos.generateSpectrumMovie("spectrum.mp4",10);
 % simulation.cos.deadlockPlot([1,5:20]);
 % simulation.cos.variancePlot([1:20]);
 % simulation.kpAdjustPlot([1,5:20]);
@@ -123,6 +126,7 @@ subplot(1,2,2)
 simulation.trajectryJudgePlot([2001:3000]);
 %}
 %% シミュレーションの実施 : 回す
+%{
 addpath(genpath("../../../SwarmSystemSimulator_2/"))    % パスを通す
 simulation = SwarmWithWaveInteractionSimulation();                 % オブジェクトの定義
 simulation.setFigureProperty("large");                  % 描画の基本設定を変更
@@ -233,3 +237,4 @@ dat1 = table2array(results_new(rows==1,"passing robots"));
 rows = (results_new.env == "w=2.1") .* (results_new.source == "cos_inout");
 dat2 = table2array(results_new(rows==1,"passing robots"));
 [h,p] = ttest2(dat1,dat2)
+%}

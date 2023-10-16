@@ -87,12 +87,12 @@ classdef Simulator
                 filename string = "movie.mp4"   % 保存するファイル名
                 speed = 1                       % 動画の再生速度
                 capture_all = false             % 画面全体をキャプチャするか？
-                padding_frame = round(1/dt*speed)   % 動画の開始終了前後に静止フレームを追加．使わない場合は0に
+                padding_frame = round(1/dt/speed)   % 動画の開始終了前後に静止フレームを追加．使わない場合は0に
             end
             f = figure;
             disp("アニメーション描画を開始します")
-            Nk = Nt + 2*padding_frame;  % 前後に静止フレームを追加
-            t_list = [1*ones(1,padding_frame),1:Nt,Nt*ones(1,padding_frame)];   % 1とNtでパディング
+            Nk = Nt/speed + 2*padding_frame;  % 前後に静止フレームを追加
+            t_list = [1*ones(1,padding_frame),1:speed:Nt,Nt*ones(1,padding_frame)];   % 1とNtでパディング
             F(Nk) = struct('cdata',[],'colormap',[]);
             for k = 1:Nk
                 func(t_list(k));
@@ -108,7 +108,7 @@ classdef Simulator
             end
             disp("アニメーション描画を終了します")
             v = VideoWriter(filename,'MPEG-4');
-            v.FrameRate = round(1/dt*speed);
+            v.FrameRate = round(1/dt);
             open(v);
             writeVideo(v,F(1:end));
             close(v);

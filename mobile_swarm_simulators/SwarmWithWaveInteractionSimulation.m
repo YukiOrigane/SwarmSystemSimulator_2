@@ -218,8 +218,8 @@ classdef SwarmWithWaveInteractionSimulation < MobileRobots2dSimulator
                 elseif obj.param.trip_mode == "round"
                     obj.trip_state(i,1,t) = obj.trip_state(i,1,t-1)+1*update_do_(i);  % 状態1個進める
                     if (obj.trip_state(i,1,t)==4)
-                         obj.trip_state(i,1,t)=4;    % 止める
-                         %obj.trip_state(i,1,t)=0;    % 戻す
+                         %obj.trip_state(i,1,t)=4;    % 止める
+                         obj.trip_state(i,1,t)=0;    % 戻す
                     end
                 end
                 
@@ -265,7 +265,7 @@ classdef SwarmWithWaveInteractionSimulation < MobileRobots2dSimulator
                 dim = 2         % 次元
             end
             delete(gca)
-            obj = obj.placePlot(t,false, (-1+2*obj.cos.is_edge(:,dim,t)).*obj.cos.is_deadlock(:,1,t));
+            obj = obj.placePlot(t,true, (-1+2*obj.cos.is_edge(:,dim,t)).*obj.cos.is_deadlock(:,1,t));
             clim([-1,1])
             colorbar
             text(obj.param.space_x(2)*0.65, obj.param.space_y(2)*0.8, "t = "+string(t), 'FontSize',12);
@@ -285,7 +285,7 @@ classdef SwarmWithWaveInteractionSimulation < MobileRobots2dSimulator
             %}
             %%%{
             delete(gca)
-            obj = obj.placePlot(t,false, obj.trip_state(:,1,t));
+            obj = obj.placePlot(t,true, obj.trip_state(:,1,t));
             clim([0,4])
             %colorbar
             colormap cool

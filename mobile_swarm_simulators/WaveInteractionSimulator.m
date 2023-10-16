@@ -40,6 +40,7 @@ classdef WaveInteractionSimulator < Simulator
             obj.param.omega_0 = [5; 5];      % 固有角速度
             obj.param.gamma = 0;        % 粘性
             obj.param.interaction_type = "wave";    % 相互作用の形
+            obj.param.is_normalize = false;     % 相互作用の正規化をするか？
             % 各種推定 %
             obj.param.do_estimate = false;
             obj.param.is_judge_continuous = false;  % 内外判定結果を連続量にするか？
@@ -104,9 +105,15 @@ classdef WaveInteractionSimulator < Simulator
             if (obj.param.interaction_type == "wave")
                 %%% 振動的相互作用 %%%
                 if(t>2)
-                    obj.phi(:,:,t+1) = 1/(1+obj.param.gamma/2*obj.param.dt)*(2*obj.phi(:,1,t) ...
+                    if obj.param.is_normalize   % 相互作用を正規化するか？
+                        obj.phi(:,:,t+1) = 1/(1+obj.param.gamma/2*obj.param.dt)*(2*obj.phi(:,1,t) ...
+                        +(obj.param.gamma/2*obj.param.dt-1)*obj.phi(:,1,t-1) ...
+                        -obj.param.kappa./(degree(obj.G)+(degree(obj.G)==0)).*obj.param.dt^2.*(full(laplacian(obj.G))*obj.phi(:,1,t))); % 陽解法によるステップ更新
+                    else    % しない
+                        obj.phi(:,:,t+1) = 1/(1+obj.param.gamma/2*obj.param.dt)*(2*obj.phi(:,1,t) ...
                         +(obj.param.gamma/2*obj.param.dt-1)*obj.phi(:,1,t-1) ...
                         -obj.param.kappa*obj.param.dt^2*full(laplacian(obj.G))*obj.phi(:,1,t)); % 陽解法によるステップ更新
+                    end          
                     if obj.param.do_estimate == true % 推定の実施
                         % xがsetされていることを要確認
                         obj = obj.calcPartialDerivative(t); % 位相の空間微分の計算
@@ -344,7 +351,7 @@ classdef WaveInteractionSimulator < Simulator
                 hold on
                 legend(string(1:obj.param.peak_memory_num))
                 ylim([-100,100])
-                xlim([0,1000])
+                %xlim([0,1000])
                 ylabel("Power of Peaks [dB]")
                 xlabel("TIme Step")
                 title("i="+string(num(i)))
@@ -355,7 +362,7 @@ classdef WaveInteractionSimulator < Simulator
                 plot(1:obj.param.Nt, permute(obj.peak_freqs(num(i),:,:),[2,3,1]))
                 legend(string(1:obj.param.peak_memory_num))
                 %ylim([-100,100])
-                xlim([0,1000])
+                %xlim([0,1000])
                 ylabel("Frequency of Peaks [Hz]")
                 xlabel("TIme Step")
                 title("i="+string(num(i)))
