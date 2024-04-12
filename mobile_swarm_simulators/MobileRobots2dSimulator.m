@@ -24,6 +24,7 @@ classdef MobileRobots2dSimulator < Simulator
 
         function obj = setDefaultParameters(obj)
             % パラメータとデフォルト値を設定
+            obj = obj.setDefaultParameters@Simulator();   % スーパークラス側の読み出し
             %%%%%%%% シミュレータの基本情報 %%%%%%%
             obj.param.dt = 0.05;    % 刻み時間
             obj.param.Nt = 400;    % 計算するカウント数
@@ -35,6 +36,7 @@ classdef MobileRobots2dSimulator < Simulator
             obj.param.rv = 1.6;      % 観測範囲
             obj.param.stop_timehistry = 256;    % 停止検知用時間幅
             obj.param.stop_threshold = 0.01;    % 停止検知用閾値
+            obj.param.adjacency_method = "distance";    % 隣接行列の作り方
             %%%%%%%% 読み込みファイル名 %%%%%%%%
             obj.param.environment_file = "setting_files/environments/narrow_space.m";  % 環境ファイル
             obj.param.placement_file = "setting_files/init_conditions/narrow_20.m";    % 初期位置ファイル
@@ -102,9 +104,19 @@ classdef MobileRobots2dSimulator < Simulator
             end
             X = repmat(obj.x(:,1,t),1,obj.param.Na);    % x座標を並べた行列
             Y = repmat(obj.x(:,2,t),1,obj.param.Na);    % y座標を並べた行列
-            distances = (X-X.').^2 + (Y-Y.').^2;  % ユークリッド距離の２乗．X-X.'でx座標の差分が得られる
-            % 隣接行列はロボット間距離が観測範囲rvよりも小さいかどうか．対角要素は無視してグラフを作成
-            G_ = graph(distances<obj.param.rv^2, 'omitselfloops');
+            distances_ = (X-X.').^2 + (Y-Y.').^2;  % ユークリッド距離の２乗．X-X.'でx座標の差分が得られる
+            if obj.param.adjacency_method == "delaunay"
+                DT_ = delaunayTriangulation(obj.x(:,:,t));   % ドロネー分割の実施
+                E_ = edges(DT_);                             % エッジを取得
+                dist_ = distances_(sub2ind(size(distances_),E_(:,1),E_(:,2)));        % 各エッジのユークリッド距離
+                E_enable_ = dist_<obj.param.rv^2;           % 観測距離よりも短いエッジを選択
+                G_ = graph;
+                G_ = addnode(G_,obj.param.Na);
+                G_ = addedge(G_, E_(E_enable_,1),E_(E_enable_,2)); % エッジからグラフを生成
+            else
+                % 隣接行列はロボット間距離が観測範囲rvよりも小さいかどうか．対角要素は無視してグラフを作成
+                G_ = graph(distances_<obj.param.rv^2, 'omitselfloops');
+            end
         end
 
         function obj = calcControlInput(obj,t)
@@ -209,6 +221,17 @@ classdef MobileRobots2dSimulator < Simulator
             daspect([1 1 1])
             colormap(gca,"cool")
             hold on
+        end
+
+        function obj = numberPlacePlot(obj, t, view_edge)
+            % ロボットの位置とロボットナンバーを描画
+            arguments
+                obj
+                t               % 時刻
+                view_edge = false                    % エッジ表示するか？
+            end
+            obj.placePlot(t,view_edge);
+            text(obj.x(:,1,t)-0.1,obj.x(:,2,t)-0.1,string(1:obj.param.Na),'FontSize',12);
         end
 
         function obj = showEdges(obj,t)

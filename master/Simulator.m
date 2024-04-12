@@ -16,7 +16,8 @@ classdef Simulator
         
         function obj = setDefaultParameters(obj)
             % パラメータとデフォルト値を設定．継承で好きにいじってほしい
-            obj.param.dt = 0.01;
+            % obj.param.dt = 0.01;
+            obj.param.folder_name = "result";   % ファイルをセーブするフォルダ名
         end
 
         function obj = setParam(obj, field, value)
@@ -77,6 +78,17 @@ classdef Simulator
             end
         end
         
+        function obj = saveFigure(obj, fig, filename)
+            % 保存フォルダに画像を保存
+            arguments
+                obj
+                fig
+                filename
+            end
+            saveas(fig, obj.param.folder_name+"/"+filename+".fig")
+            saveas(fig, obj.param.folder_name+"/"+filename+".png")
+        end
+
         function obj = makeMovie(obj, func, dt, Nt, filename, speed, capture_all, padding_frame)
             % 動画の作成
             arguments
@@ -107,7 +119,8 @@ classdef Simulator
                 end
             end
             disp("アニメーション描画を終了します")
-            v = VideoWriter(filename,'MPEG-4');
+            v = VideoWriter(obj.param.folder_name+"/"+filename,'MPEG-4');
+            %v = VideoWriter(filename,'MPEG-4');
             v.FrameRate = round(1/dt);
             open(v);
             writeVideo(v,F(1:end));

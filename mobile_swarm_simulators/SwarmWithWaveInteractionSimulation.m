@@ -47,6 +47,7 @@ classdef SwarmWithWaveInteractionSimulation < MobileRobots2dSimulator
             % 各種変数を初期化．シミュレーションをやり直す度に必ず呼ぶこと
             % 状態変数の定義と初期値の代入を行うこと
             obj = obj.initializeVariables@MobileRobots2dSimulator();   % スーパークラス側の読み出し
+            rng(1); % 乱数を固定
             obj.cos = obj.cos.setParam("phi_0",rand(obj.param.Na,1));
             obj.kp_adjust = ones(obj.param.Na,1,obj.param.Nt);          % kp補正係数．標準は1
             obj.is_deadlock = zeros(obj.param.Na,1,obj.param.Nt);
@@ -65,7 +66,7 @@ classdef SwarmWithWaveInteractionSimulation < MobileRobots2dSimulator
             obj.cos = obj.cos.setParam("dt",obj.param.dt);  % 基本設定を共有しておく
             obj.cos = obj.cos.setParam("Nt",obj.param.Nt);
             obj.cos = obj.cos.setParam("Na",obj.param.Na);
-            obj.cos = obj.cos.setParam("interaction_type","wave");
+            %obj.cos = obj.cos.setParam("interaction_type","wave");
             obj.cos = obj.cos.initializeVariables();
         end
 
@@ -380,25 +381,65 @@ classdef SwarmWithWaveInteractionSimulation < MobileRobots2dSimulator
             elseif source == "stop"
                 judge_ = obj.is_stop;
             end
-            figure
-            %{
-            for n = num
-                l = line([stepwidth(1) stepwidth(end)],[n n]);
-                l.LineWidth = 0.7;
-                l.Color = "#CCCCCC";
-                hold on
-                t_deadlock = stepwidth(permute(judge_(n,1,stepwidth),[3,1,2])==1); % デッドロックと判定されていた時刻
-                plot(t_deadlock, repmat(n,length(t_deadlock)),'o','Color',"#D95319",'MarkerFaceColor',"#D95319");
-            end
-            %}
-            
+            %figure
             imagesc(permute(1-judge_(num,1,stepwidth),[1,3,2]));
             colormap("gray")
             
             hold off
             ylabel("Robots Number")
             xlabel("Timestep")
-           
+        end
+
+        function obj = deadlockDetectionPlotColor(obj,stepwidth,num)
+            % 各エージェントのデッドロック検出時刻を色表示
+            arguments
+                obj
+                stepwidth = 1:obj.param.Nt  % 時刻幅
+                num = 1:obj.param.Na        % エージェント集合
+            end
+
+            judge_ = obj.is_stop + 2*obj.cos.is_deadlock;
+            %figure
+            imagesc(stepwidth(1),1,permute(3-judge_(num,1,stepwidth),[1,3,2]));
+            map = [0 0 0
+            0 0 1
+            1 0 0
+            1 1 1];
+            colormap(map)
+            hold off
+            ylabel("Robots Number")
+            xlabel("Timestep")
+            obj.saveFigure(gcf, "deadlock_color");
+        end
+
+        function obj = deadlockColorPart(obj,t)
+            % ストップ検出動画用
+            arguments
+                obj
+                t      % 時刻
+            end
+            window = 1000;  % この時間幅で描画
+            bar_position = 800; % バーの走るポジション
+            if t<bar_position
+                min_t = 1;
+                max_t = window;
+            elseif t>(obj.param.Nt+window-bar_position)
+                min_t = obj.param.Nt-window;
+                max_t = obj.param.Nt;
+            else
+                min_t = t-bar_position;
+                max_t = t+window-bar_position;
+            end
+            obj = obj.deadlockDetectionPlotColor(min_t:t);
+            xlim([min_t,max_t]);
+            hold on
+            xline(t,'r')
+            map = [0 0 0
+            0 0 1
+            1 0 0
+            1 1 1];
+            colormap(map)
+            hold off
         end
 
         function obj = generateMovieEstimate(obj, filename, speed)
@@ -410,6 +451,17 @@ classdef SwarmWithWaveInteractionSimulation < MobileRobots2dSimulator
             end
              %obj.makeMovie(@obj.edgeJudgePlot, obj.param.dt, obj.param.Nt, filename, speed, true);
             obj.makeMovie(@obj.edgeDeadlockPlot, obj.param.dt, obj.param.Nt, filename, speed, true);
+        end
+
+        function obj = generateMovieDetection(obj, filename, speed)
+            % 相対位置判定のムービーを生成
+            arguments
+                obj
+                filename string = "detection.mp4" % 保存するファイル名
+                speed = 1       % 動画の再生速度
+            end
+             %obj.makeMovie(@obj.edgeJudgePlot, obj.param.dt, obj.param.Nt, filename, speed, true);
+            obj.makeMovie(@obj.deadlockColorPart, obj.param.dt, obj.param.Nt, filename, speed, true);
         end
 
         function obj = generateMovieTrip(obj, filename, speed)

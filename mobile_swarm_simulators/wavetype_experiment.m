@@ -14,40 +14,60 @@ simulation.setFigureProperty("large");                  % 描画の基本設定�
 %% シミュレーションの実施 : 単発
 simulation = simulation.setParam("environment_file","setting_files/environments/square.m");   % パラメタ変更
 simulation = simulation.setParam("placement_file","setting_files/init_conditions/round_20.m");   % パラメタ変更
+%simulation = simulation.setParam("placement_file","setting_files/init_conditions/round_10.m");   % パラメタ変更
+%simulation = simulation.setParam("placement_file","setting_files/init_conditions/free_Na_3.m");   % パラメタ変更
+%simulation = simulation.setParam("placement_file","setting_files/init_conditions/missed_Na_10.m");   % パラメタ変更
 %simulation = simulation.setParam("placement_file","setting_files/init_conditions/round_1.m");   % パラメタ変更
 %simulation = simulation.setParam("environment_file","setting_files/environments/narrow_space_hosome_w_4.m");   % パラメタ変更
 %simulation = simulation.setParam("placement_file","setting_files/init_conditions/narrow_20.m");   % パラメタ変更
 %simulation = simulation.setParam("environment_file","setting_files/environments/free.m");   % パラメタ変更
 %simulation = simulation.setParam("placement_file","setting_files/init_conditions/narrow_20.m");   % パラメタ変更
 % COS %
-simulation.cos = simulation.cos.setParam("kappa",400);
+simulation.cos = simulation.cos.setParam("interaction_type","diffusion");
+%simulation.cos = simulation.cos.setParam("interaction_type","wave");
+simulation.cos = simulation.cos.setParam("kappa",100);
+%simulation.cos = simulation.cos.setParam("dt",0.01);
 simulation.cos = simulation.cos.setParam("gamma",0);
+simulation.cos = simulation.cos.setParam("self_exitation_gain", 0);
+%simulation.cos = simulation.cos.setParam("self_exitation_threshold", -60);
 simulation.cos = simulation.cos.setParam("do_estimate",true);
 simulation.cos = simulation.cos.setParam("time_histry",256);
-simulation.cos = simulation.cos.setParam("power_threshold",10^-7); % 10^-8
-simulation.cos = simulation.cos.setParam("prominence_threshold",10^-2); % 10^-8
+simulation.cos = simulation.cos.setParam("power_threshold_dB",-60); % ピークの高さ閾値
+simulation.cos = simulation.cos.setParam("prominence_threshold_dB",5); % ピークのプロミネンス閾値
+simulation.cos = simulation.cos.setParam("use_peak_matching", true);   % ピークマッチングを利用
+simulation.cos = simulation.cos.setParam("number_of_matching_peaks", 3);    % ピークマッチングを何点でとるか？
 simulation.cos = simulation.cos.setParam("peak_memory_num",1);
-simulation.cos = simulation.cos.setParam("deadlock_usepower",true);
-simulation.cos = simulation.cos.setParam("is_normalize",true);  % 相互作用の正規化を行う
+simulation.cos = simulation.cos.setParam("deadlock_usepower",true);% true
+simulation.cos = simulation.cos.setParam("is_normalize",false);  % 相互作用の正規化を行う
+simulation.cos = simulation.cos.setParam("deadlock_stepwith",100);  % デッドロック判定期間を延長
+simulation.cos = simulation.cos.setParam("use_softtouch",true);    % ソフトタッチ使うか？
+simulation.cos = simulation.cos.setParam("use_softrelease",true);  % ソフトリリース使うか？
+simulation.cos = simulation.cos.setParam("delta_release",0.1);      % ソフトリリースの下限値
+simulation.cos = simulation.cos.setParam("power_variance_db",2*10^-3);
 %simulation.cbf = simulation.cbf.disable();
 % 停止検知 %
 simulation = simulation.setParam("stop_timehistry",256);
-simulation = simulation.setParam("stop_threshold",10^-3);
+%simulation = simulation.setParam("stop_threshold",10^-3);
+%simulation = simulation.setParam("stop_threshold",10^-2);
+simulation = simulation.setParam("stop_threshold",0.5);
 % Swarm %
 simulation = simulation.setParam("kp",8);   % Swarm : 勾配追従力ゲイン
+%simulation = simulation.setParam("kp",0);   % ！！！停止注意！！！
 simulation = simulation.setParam("kf",0);  % Swarm : 群形成力ゲイン
 simulation = simulation.setParam("kd",10);   % Swarm : 粘性ゲイン
-simulation = simulation.setParam("Nt",15000);
+simulation = simulation.setParam("Nt",3000);
+simulation = simulation.setParam("dt",0.05);
 simulation = simulation.setParam("is_debug_view",false);
 simulation = simulation.setParam("initial_pos_variance", 0);
 %simulation = simulation.setParam("attract_force_type", "linear_fbx");
 simulation = simulation.setParam("attract_force_type", "trip");
+simulation = simulation.setParam("adjacency_method", "distance");   % 隣接行列の作り方
 % CBF %
 simulation = simulation.setParam("cbf_rs", 0.8);  % 安全距離
 simulation = simulation.setParam("cbf_gamma", 5); % ナイーブパラメタ
 % kp調整 %
-simulation = simulation.setParam("deadlock_source","cos");
-%simulation = simulation.setParam("deadlock_source","stop");
+%simulation = simulation.setParam("deadlock_source","cos");
+simulation = simulation.setParam("deadlock_source","stop");
 %simulation = simulation.setParam("do_kp_adjust",false);  % kp調整を実施？
 simulation = simulation.setParam("do_kp_adjust",true);  % kp調整を実施？
 simulation = simulation.setParam("kp_adjust_out",-0.3);
@@ -63,30 +83,67 @@ simulation = simulation.readSettingFiles(); % 設定ファイルの読み込み
 simulation = simulation.initializeVariables();  % 初期値の計算
 simulation = simulation.defineSystem();  % システム設定（誘導場の生成）
 simulation = simulation.simulate(); % シミュレーションの実施
+% データ保存先フォルダの作成と指定 %
+folder_name = "data"+string(datetime('now','Format','yyyyMMdd/HH_mm_ss'));
+% folder_name = "Nt3000_stop";
+simulation = simulation.setParam("folder_name",folder_name);
+simulation.cos = simulation.cos.setParam("folder_name",folder_name);
+mkdir(folder_name);
+save(folder_name+"/simulation.mat")
+
 %% 描画とか
 figure
-simulation.edgeDeadlockPlot(1,2);
-simulation.placePlot(12000,true);
-% simulation.cos = simulation.cos.plot(true);
+%simulation.edgeDeadlockPlot(1,2);
+%simulation.numberPlacePlot(3121,true);
+%simulation.placePlot(1,false);
+simulation.cos = simulation.cos.phaseGapPlot();
+% simulation.cos = simulation.cos.partPlot(3500);
 % simulation = simulation.generateMovieEstimate([],10);
-% simulation = simulation.generateMovieTrip("movie.mp4",20);
-simulation = simulation.generateMovieEstimate();
+%simulation = simulation.generateMovieTrip("movie_fast.mp4",10);
+% simulation = simulation.generateMovieDetection("detection.mp4",20);
+%simulation.cos = simulation.cos.generatePhaseMovie("phase.mp4",10);
+%simulation = simulation.generateMovieEstimate();
 simulation = simulation.setParam("is_debug_view",true);
-simulation = simulation.calcControlInput(8000);
-simulation.cos.relativePositionEstimate(750,[8,9,10]);  % 推定デバッグ表示
-simulation.cos.peakAndFreqPlot([8,9,10]);   % エージェント毎ピーク履歴
-simulation.cos.peakAndFreqPlot2([1,5:20]);   % モード毎ピーク履歴
-% simulation.cos.spectrumPlot(1500,8);   % 特定時刻スペクトラムプロット
-% simulation.cos.generateSpectrumMovie("spectrum.mp4",10);
+%simulation = simulation.calcControlInput(8000);
+%simulation.cos.relativePositionEstimate(150,[8,9,10]);  % 推定デバッグ表示
+%simulation.cos.peakAndFreqPlot([1,6,8]);   % エージェント毎ピーク履歴
+%simulation.cos.peakAndFreqPlot2([1,2]);   % モード毎ピーク履歴
+% simulation.cos.spectrumPlot(7227,true,[1,2]);   % 特定時刻スペクトラムプロット
+%simulation.cos.generateSpectrumMovie("spectrum.mp4",5);
 % simulation.cos.deadlockPlot([1,5:20]);
-% simulation.cos.variancePlot([1:20]);
+% simulation.cos.variancePlot([9,10]);
+%simulation.cos.meanVariancePlot([9,10]);
 % simulation.kpAdjustPlot([1,5:20]);
 % simulation.minimumDistanceCheck();
-% simulation.deadlockDetectionPlot("result");
+% simulation.deadlockDetectionPlot("stop");
+%simulation.deadlockDetectionPlotColor();
+%simulation.cos.phaseTimeVariancePlot();
 % simulation.stopDetect(600);
-% simulation.variancePlot([1:20]);
+% simulation.variancePlot([1:10]);
 % simulation.plotPositionVariance();
-simulation.obtainNumberOfPassedRobots();
+%simulation.obtainNumberOfPassedRobots();
+%simulation.cos.compareEstimateAndEigenFreq([1],2);
+simulation.saveFigure(gcf, "estimate_eigen");
+
+%simulation.cos.phaseSpacePlot(2500,0:9,[4,3]);
+simulation.saveFigure(gcf, "phase_space");
+
+figure
+simulation.cos.energyPlot();
+simulation.saveFigure(gcf, "energy");
+%simulation.cos.generateEnergyMovie("energy.mp4", 10);
+%simulation.cos.generatePhaseSpaceMovie("phase_space.mp4",1);
+%{
+t = 7217;
+i = 1;
+t_start_ = t-simulation.cos.param.time_histry;
+[p_,f_] = pspectrum(permute(simulation.cos.phi(i,1,t_start_:t),[3,1,2]), simulation.cos.t_vec(t_start_:t));
+figure
+plot(f_,10*log10(p_));
+text(max(f_)*0.7, 0, "t = "+string(t), 'FontSize',12);
+ylim([-100,20])
+xlim([0,10])
+%}
 %{
 t_list = [1 600 1200 1800];
 for t = t_list

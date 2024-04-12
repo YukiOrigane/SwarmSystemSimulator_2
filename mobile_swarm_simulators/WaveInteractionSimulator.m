@@ -6,9 +6,14 @@ classdef WaveInteractionSimulator < Simulator
         % システムの変数を記載
         t_vec     % 固有時刻ベクトル
         phi       % 位相 [台数,1,時刻]
+        xi        % ラプラシアン固有モード量 [台数,1,時刻]
+        sigma     % 固有値 [台数,1,時刻]
         %dphidt   % ロボット速さ [台数,1,時刻]
         %u         % 入力
         G         % グラフオブジェクト．MATLABのgraph参照
+        dphi_touch  % ソフトタッチ用．最後にエッジが追加された時刻の位相値
+        dphi_release% ソフトリリース用．最後にエッジが削除された時刻の位相差（ソフトタッチ込）
+        L_pre       % 一時刻前のラプラシアン行列
         x        % エージェント座標
         phi_x     % 位相の方向微分 [台数,空間次元,時刻]
         is_edge  % 自身が端っこか？ [台数,空間次元,時刻]
@@ -17,6 +22,8 @@ classdef WaveInteractionSimulator < Simulator
         is_deadlock % 自身がデッドロック状態か判定 [台数,1,時刻]
         peak_variances_db  % ピークの分散 [台数,モード数,時刻]
         freq_variances  % ピーク周波数の分散 [台数,モード数,時刻]
+        potential_energy    % 全ポテンシャルエネルギー [時刻]
+        phase_variances % 位相値の分散（拡散相互作用の場合）[台数,1,時刻]
     end
     
     methods
@@ -29,6 +36,7 @@ classdef WaveInteractionSimulator < Simulator
 
         function obj = setDefaultParameters(obj)
             % パラメータとデフォルト値を設定
+            obj = obj.setDefaultParameters@Simulator();   % スーパークラス側の読み出し
             %%%%%%%% シミュレータの基本情報 %%%%%%%
             obj.param.dt = 0.05;    % 刻み時間
             obj.param.Nt = 400;    % 計算するカウント数
@@ -37,21 +45,28 @@ classdef WaveInteractionSimulator < Simulator
             % 振動子系そのもの %
             % obj.param.K = 1;       % ゲイン
             obj.param.kappa = 10;      % 結合強度
-            obj.param.omega_0 = [5; 5];      % 固有角速度
+            obj.param.omega_0 = 0*ones(obj.param.Na,1);      % 固有角速度
             obj.param.gamma = 0;        % 粘性
             obj.param.interaction_type = "wave";    % 相互作用の形
             obj.param.is_normalize = false;     % 相互作用の正規化をするか？
+            obj.param.use_softtouch = true;     % ソフトタッチを使うか？
+            obj.param.use_softrelease = false;     % ソフトリリースを使うか？
+            obj.param.delta_release = 0.1;     % ソフトリリースの位相差下限値
             % 各種推定 %
             obj.param.do_estimate = false;
             obj.param.is_judge_continuous = false;  % 内外判定結果を連続量にするか？
             obj.param.time_histry = 2048;     % パワースペクトラムで，どれくらい前の時刻情報まで使うか？
             obj.param.minimum_store = 64;     % ここまでデータたまるまではスタートしない
-            obj.param.power_threshold = 10^-10;
+            obj.param.power_threshold_dB = 10^-10;
+            obj.param.prominence_threshold_dB = 1;
             obj.param.peak_memory_num = 2;   % ピーク情報を何次まで記録するか
             obj.param.power_variance_db = 10^-3; % デッドロック判定時のパワー分散閾値
             obj.param.freq_variance_hz = 10^-5;  % デッドロック判定時の周波数分散閾値
             obj.param.deadlock_stepwith = 100;  % デッドロック判定．何ステップ分の定常状態を要請するか？
             obj.param.deadlock_usepower = true; % 判定にパワーも使うか？
+            obj.param.use_peak_matching = false;    % 推定にピークマッチングを導入するか？
+            obj.param.number_of_matching_peaks = 3; % ピークマッチングを何点でとるか？
+            obj.param.diffusion_phase_var_threshold = 1;    % 拡散相互作用の場合の，デッドロック検出閾値
             %%%%%%%% 読み込みファイル名 %%%%%%%%
             %obj.param.environment_file = "setting_files/environments/narrow_space.m";  % 環境ファイル
             %obj.param.placement_file = "setting_files/init_conditions/narrow_20.m";    % 初期位置ファイル
@@ -65,8 +80,14 @@ classdef WaveInteractionSimulator < Simulator
         function obj = initializeVariables(obj)
             % 各種変数を初期化．シミュレーションをやり直す度に必ず呼ぶこと
             % 状態変数の定義と初期値の代入を行うこと
+            if obj.param.use_peak_matching
+                obj.param.peak_memory_num = obj.param.number_of_matching_peaks;  % ピークマッチングを使用する場合，3つモードを記録しておく
+                disp("ピークマッチングを使うため，ピークは"+string(obj.param.number_of_matching_peaks)+"つ保存されます")
+            end
             obj.t_vec = 0:obj.param.dt:obj.param.dt*(obj.param.Nt-1); % 時刻ベクトルの定義
             obj.phi(:,:,:) = zeros(obj.param.Na, 1, obj.param.Nt);    % 状態変数の定義
+            obj.xi(:,:,:) = zeros(obj.param.Na, 1, obj.param.Nt);    % 状態変数の定義
+            obj.sigma(:,:,:) = zeros(obj.param.Na, 1, obj.param.Nt);    % 状態変数の定義
             obj.phi_x(:,:,:) = zeros(obj.param.Na, 2, obj.param.Nt);    % 状態変数の定義
             obj.phi(:,:,1) = obj.param.phi_0;   % 初期値の代入
             obj.x(:,:,:) = zeros(obj.param.Na, 2, obj.param.Nt);    % 状態変数の定義
@@ -76,6 +97,11 @@ classdef WaveInteractionSimulator < Simulator
             obj.peak_freqs(:,:,:) = zeros(obj.param.Na, obj.param.peak_memory_num, obj.param.Nt);    % ピークの大きさ
             obj.peak_variances_db(:,:,:) = zeros(obj.param.Na, obj.param.peak_memory_num, obj.param.Nt);    % ピークの分散
             obj.freq_variances(:,:,:) = zeros(obj.param.Na, obj.param.peak_memory_num, obj.param.Nt);    % ピーク位置の分散
+            obj.potential_energy(:,1) = zeros(obj.param.Nt,1);  % ポテンシャルエネルギー
+            obj.dphi_touch(:,:) = zeros(obj.param.Na,obj.param.Na); % 最終接続時の位相差
+            obj.dphi_release(:,:) = zeros(obj.param.Na,obj.param.Na); % 最終切断時の位相差
+            obj.L_pre(:,:) = zeros(obj.param.Na,obj.param.Na);
+            obj.phase_variances(:,:,:) = zeros(obj.param.Na, 1, obj.param.Nt);    % 各エージェントの位相の分散
         end
 
         function obj = defineSystem(obj)
@@ -102,18 +128,46 @@ classdef WaveInteractionSimulator < Simulator
                 obj
                 t   % 時刻
             end
+            L = full(laplacian(obj.G));
             if (obj.param.interaction_type == "wave")
                 %%% 振動的相互作用 %%%
                 if(t>2)
                     if obj.param.is_normalize   % 相互作用を正規化するか？
                         obj.phi(:,:,t+1) = 1/(1+obj.param.gamma/2*obj.param.dt)*(2*obj.phi(:,1,t) ...
                         +(obj.param.gamma/2*obj.param.dt-1)*obj.phi(:,1,t-1) ...
-                        -obj.param.kappa./(degree(obj.G)+(degree(obj.G)==0)).*obj.param.dt^2.*(full(laplacian(obj.G))*obj.phi(:,1,t))); % 陽解法によるステップ更新
+                        -obj.param.kappa./(degree(obj.G)+(degree(obj.G)==0)).*obj.param.dt^2.*L*obj.phi(:,1,t)); % 陽解法によるステップ更新
                     else    % しない
                         obj.phi(:,:,t+1) = 1/(1+obj.param.gamma/2*obj.param.dt)*(2*obj.phi(:,1,t) ...
                         +(obj.param.gamma/2*obj.param.dt-1)*obj.phi(:,1,t-1) ...
-                        -obj.param.kappa*obj.param.dt^2*full(laplacian(obj.G))*obj.phi(:,1,t)); % 陽解法によるステップ更新
-                    end          
+                        -obj.param.kappa*obj.param.dt^2*L*obj.phi(:,1,t)); % 陽解法によるステップ更新
+                    end
+                    Phi_i = repmat(obj.phi(:,:,t),1,obj.param.Na);  % 位相ベクトルを横に並べたもの．行列表現のphi_i相当
+                    Phi_j = Phi_i.';    % 位相ベクトルを縦に並べたもの．行列表現のphi_j相当
+                    if obj.param.use_softtouch  % ソフトタッチ
+                        deltaL = L-obj.L_pre;   % Lの差分
+                        deltaL_mask_all = ( deltaL - diag(diag(deltaL)) ) ~= 0; % deltaLのエッジ変更部分をマスク
+                        deltaL_mask_add = ( deltaL - diag(diag(deltaL)) ) < 0;  % deltaLのエッジ追加部分をマスク
+                        obj.dphi_touch = obj.dphi_touch-obj.dphi_touch.*deltaL_mask_all;    % エッジが変化した部分のdphi_touchをゼロに
+                        obj.dphi_touch = obj.dphi_touch + (Phi_j-Phi_i).*deltaL_mask_add;   % エッジ追加時の位相差を記録
+                        dphi_touch_memory = obj.dphi_touch;
+                        obj.phi(:,:,t+1) = obj.phi(:,:,t+1) - obj.param.kappa*obj.param.dt^2*sum(obj.dphi_touch,2);
+                        % エネルギー計算
+                        phi_diff = (Phi_j-Phi_i);
+                        obj.potential_energy(t) = 1/2*obj.param.kappa*sum((full(adjacency(obj.G)).*(phi_diff-obj.dphi_touch)).^2,'all')/2;
+                    else
+                        % エネルギー計算
+                        obj.potential_energy(t) = 1/2*obj.param.kappa*obj.phi(:,1,t).'*L*obj.phi(:,1,t);
+                    end
+                    if obj.param.use_softrelease    % ソフトリリース
+                        deltaL = L-obj.L_pre;   % Lの差分
+                        deltaL_mask_cut = ( deltaL - diag(diag(deltaL)) ) > 0;% deltaLのエッジ削除部分をマスク
+                        releasing_pair = (abs(obj.dphi_release-Phi_i).*(obj.dphi_release~=0)) > obj.param.delta_release;
+                        obj.dphi_release = obj.dphi_release.*releasing_pair;    % 位相差が運動エネルギーになったらゼロに
+                        releasing_pair = releasing_pair | deltaL_mask_cut;
+                        obj.dphi_release = obj.dphi_release + (Phi_j-dphi_touch_memory).*deltaL_mask_cut;
+                        obj.phi(:,:,t+1) = obj.phi(:,:,t+1) + obj.param.kappa*obj.param.dt^2*sum((obj.dphi_release-Phi_i).*releasing_pair,2);
+                        obj.potential_energy(t) = obj.potential_energy(t) + obj.param.kappa*sum(((obj.dphi_release-Phi_i).*releasing_pair).^2,'all')/2;
+                    end
                     if obj.param.do_estimate == true % 推定の実施
                         % xがsetされていることを要確認
                         obj = obj.calcPartialDerivative(t); % 位相の空間微分の計算
@@ -123,11 +177,24 @@ classdef WaveInteractionSimulator < Simulator
                 else
                     obj.phi(:,:,t+1) = obj.phi(:,:,t);
                 end
+                obj.L_pre = L;
             elseif obj.param.interaction_type == "diffusion"
                 %%% 拡散相互作用 %%%
                 obj.phi(:,:,t+1) = obj.phi(:,:,t) + obj.param.dt*(obj.param.omega_0 ...
                     -obj.param.kappa*full(laplacian(obj.G))*obj.phi(:,:,t));
+                obj = obj.judgeDeadlockDiffusion(t);
             end
+            
+            %%% 固有モード関連の計算 %%%
+            if obj.param.is_normalize
+                D = diag(diag(L));
+                L = pinv(D)*L;
+                [P_,D_] = eig(L);
+            else
+                [P_,D_] = eig(full(laplacian(obj.G)));
+            end
+            obj.xi(:,1,t) = P_.'*obj.phi(:,1,t);
+            obj.sigma(:,1,t) = diag(D_);
         end
         
         function obj = calcPartialDerivative(obj,t)
@@ -196,9 +263,12 @@ classdef WaveInteractionSimulator < Simulator
             [px_,fx_] = pspectrum(permute(obj.phi_x(:,1,t_start_:t),[3,1,2]), obj.t_vec(t_start_:t));
             [py_,fy_] = pspectrum(permute(obj.phi_x(:,2,t_start_:t),[3,1,2]), obj.t_vec(t_start_:t));
             for i = 1:obj.param.Na  % エージェント毎回し
-                [peak,peak_index] = findpeaks(p_(:,i),"MinPeakHeight",obj.param.power_threshold);    % ピーク検出
-                [~,peakx_index] = findpeaks(px_(:,i),"MinPeakHeight",obj.param.power_threshold);    % ピーク検出
-                [~,peaky_index] = findpeaks(py_(:,i),"MinPeakHeight",obj.param.power_threshold);    % ピーク検出
+                [~,peak_index] = findpeaks(10*log10(p_(:,i)),"MinPeakHeight",obj.param.power_threshold_dB, "MinPeakProminence",obj.param.prominence_threshold_dB);    % ピーク検出
+                [~,peakx_index] = findpeaks(10*log10(px_(:,i)),"MinPeakHeight",obj.param.power_threshold_dB, "MinPeakProminence",obj.param.prominence_threshold_dB);    % ピーク検出
+                [~,peaky_index] = findpeaks(10*log10(py_(:,i)),"MinPeakHeight",obj.param.power_threshold_dB, "MinPeakProminence",obj.param.prominence_threshold_dB);    % ピーク検出
+                p_i_ = p_(:,i);
+                peak = p_i_(peak_index);  % ピーク値取得
+                % TODO : 自励の処理を書く
                 if length(peak)<obj.param.peak_memory_num
                     n_ = length(peak);
                 else
@@ -278,18 +348,60 @@ classdef WaveInteractionSimulator < Simulator
             %if t>700
             %    disp("debug")
             %end
+
+            %%% 振動的相互作用 %%%
             peak_variances_ = zeros(obj.param.Na,obj.param.peak_memory_num);    % ピークの大きさの分散
             freq_variances_ = zeros(obj.param.Na,obj.param.peak_memory_num);    % ピークの位置の分散
-            peak_variances_ = var(10*log10(obj.peaks(:,:,t-obj.param.deadlock_stepwith+1:t)),0,3);   % 時刻に沿った分散を計算．N-1で正規化
-            freq_variances_ = var(obj.peak_freqs(:,:,t-obj.param.deadlock_stepwith+1:t),0,3);
-            if obj.param.deadlock_usepower == true
-                obj.is_deadlock(:,:,t) = prod(peak_variances_<obj.param.power_variance_db,2).*prod(freq_variances_<obj.param.freq_variance_hz,2);
+            
+            if obj.param.use_peak_matching  % 余計にピーク点を記録しておき，周波数の近いピークを同一ピークとみなす
+                % 1個前と今の差分行列
+                freq_Diff_ = repmat(permute((obj.peak_freqs(:,:,t)+(obj.peak_freqs(:,:,t)==0).*100),[2,3,1]),1,obj.param.number_of_matching_peaks,1)-repmat(permute(obj.peak_freqs(:,:,t-1),[3,2,1]),obj.param.number_of_matching_peaks,1,1);
+                peak_Diff_ = repmat(permute(10*log10(obj.peaks(:,:,t)+(obj.peaks(:,:,t)==0).*10^-10),[2,3,1]),1,obj.param.number_of_matching_peaks,1)-repmat(permute(10*log10(obj.peaks(:,:,t-1)),[3,2,1]),obj.param.number_of_matching_peaks,1,1);
+                [MF_,col_] = mink(freq_Diff_,1,2,"ComparisonMethod","abs");   % 各ピーク点について，1つ前と最も近い点を探す．列インデックスも取る
+                row_ = repmat((1:obj.param.number_of_matching_peaks).', 1,1,obj.param.Na);
+                oku_ = repmat(permute(1:obj.param.Na,[1,3,2]),obj.param.number_of_matching_peaks,1,1);
+                linear_Index = sub2ind(size(freq_Diff_),row_,col_,oku_);
+                MP_ = peak_Diff_(linear_Index);              % 該当するパワー差も抽出
+                [MinkFreq,row_] = mink(MF_,obj.param.number_of_matching_peaks-1,1,"ComparisonMethod","abs");    % 近い順にピーク点のペアいくつかの周波数差分を抽出
+                col_ = repmat(ones(obj.param.number_of_matching_peaks-1,1), 1,1,obj.param.Na);
+                oku_ = repmat(permute(1:obj.param.Na,[1,3,2]),obj.param.number_of_matching_peaks-1,1,1);
+                linear_Index = sub2ind(size(MP_),row_,col_,oku_);
+                MinkPower = MP_(linear_Index);
+                % ピーク変動の2乗和を計算
+                peak_variances_ = permute(sum(MinkPower.^2,1)/(obj.param.number_of_matching_peaks-1),[3,1,2]);
+                freq_variances_ = permute(sum(MinkFreq.^2,1)/(obj.param.number_of_matching_peaks-1),[3,1,2]);
+                obj.peak_variances_db(:,1,t) = peak_variances_;
+                obj.freq_variances(:,1,t) = freq_variances_;    % 分散とは書いてあるが，この場合変化量の二乗和で分散ではない
+                pv_mean_ = mean(obj.peak_variances_db(:,:,t-obj.param.deadlock_stepwith+1:t),3);
+                fv_mean_ = mean(obj.freq_variances(:,:,t-obj.param.deadlock_stepwith+1:t),3);
+                if obj.param.deadlock_usepower == true
+                    obj.is_deadlock(:,:,t) = (pv_mean_(:,1)<obj.param.power_variance_db).*(fv_mean_(:,1)<obj.param.freq_variance_hz);
+                else
+                    obj.is_deadlock(:,:,t) = fv_mean_(:,1)<obj.param.freq_variance_hz;
+                end
             else
-                obj.is_deadlock(:,:,t) = prod(freq_variances_<obj.param.freq_variance_hz,2);
-            end
+                peak_variances_ = var(10*log10(obj.peaks(:,:,t-obj.param.deadlock_stepwith+1:t)),0,3);   % 時刻に沿った分散を計算．N-1で正規化
+                freq_variances_ = var(obj.peak_freqs(:,:,t-obj.param.deadlock_stepwith+1:t),0,3);
+                if obj.param.deadlock_usepower == true
+                    obj.is_deadlock(:,:,t) = prod(peak_variances_<obj.param.power_variance_db,2).*prod(freq_variances_<obj.param.freq_variance_hz,2);
+                else
+                    obj.is_deadlock(:,:,t) = prod(freq_variances_<obj.param.freq_variance_hz,2);
+                end
                 obj.peak_variances_db(:,:,t) = peak_variances_;
-            obj.freq_variances(:,:,t) = freq_variances_;
+                obj.freq_variances(:,:,t) = freq_variances_;
+            end
+            obj.is_deadlock(:,:,t) = 1; %% DEBUG CODE HERE !!!!
             % 各モードの大きさ，周波数について全ての分散が閾値を下回っていたら，デッドロックと判定
+        end
+
+        function obj = judgeDeadlockDiffusion(obj,t)
+            if t < obj.param.minimum_store+obj.param.deadlock_stepwith
+                return  % データがたまっていなかったらリターン
+            end
+                %%% 拡散的相互作用の場合 %%%
+                phase_variances_ = var(obj.phi(:,1,t-obj.param.minimum_store:t),0,3);
+                obj.is_deadlock(:,:,t) = phase_variances_<obj.param.diffusion_phase_var_threshold;
+                obj.phase_variances(:,:,t) = phase_variances_;
         end
 
         %%%%%%%%%%%%%%%%%%%%% 描画まわり %%%%%%%%%%%%%%%%%%
@@ -306,13 +418,64 @@ classdef WaveInteractionSimulator < Simulator
             if is_power == true
              plot(1:obj.param.Nt, permute(10*log10(abs(obj.phi(:,1,:))),[1,3,2]))
             end
+            obj.saveFigure(gcf, "phase");
         end
 
-        function obj = spectrumPlot(obj,t,num)
+        function obj = partPlot(obj,t)
+            % 動画用の，指定時刻までの位相をプロットする関数
+            arguments
+                obj
+                t      % 時刻
+            end
+            if t == 1
+                return
+            end
+            plot(1:t, permute(obj.phi(:,1,1:t),[1,3,2]))
+            hold on
+            xline(t,'r')
+            hold off
+            xlim([1,obj.param.Nt]);
+        end
+        
+        function obj = phaseTimeVariancePlot(obj)
+            arguments
+                obj
+            end
+            plot(1:obj.param.Nt, permute(obj.phase_variances(:,1,:),[1,3,2]))
+            xlim([1,obj.param.Nt]);
+        end
+
+        function obj = energyPlot(obj,t)
+            % 動画用の，指定時刻までのエネルギーをプロットする関数
+            arguments
+                obj
+                t = obj.param.Nt      % 時刻
+            end
+            if t == 1
+                return
+            end
+            phi_dot = gradient(permute(obj.phi(:,:,1:t),[1,3,2]))/obj.param.dt;     % 中心差分．両端だけ片側差分
+            kinetic_energy = 1/2*phi_dot.^2;
+            plot(1:t,sum(kinetic_energy))
+            hold on
+            plot(1:t,obj.potential_energy(1:t))
+            plot(1:t,obj.potential_energy(1:t).'+sum(kinetic_energy))
+            hold on
+            xline(t,'r')
+            hold off
+            xlim([1,obj.param.Nt]);
+            legend(["$K$","$U$","$K+U$"],'Interpreter','latex')
+            xlabel("timestep")
+            ylim([0 300])
+            ylabel("Energy")
+        end
+
+        function obj = spectrumPlot(obj,t,view_eigen,num)
             % 指定エージェントのスペクトラムを描画
             arguments
                 obj
                 t       % 時刻
+                view_eigen = true   % 固有値ベースの真値を描画するか？
                 num = [9,10]    % エージェント番号
             end
             if t<obj.param.minimum_store    % 蓄積データ少ない間は推定しない
@@ -328,6 +491,9 @@ classdef WaveInteractionSimulator < Simulator
             [p,f] = pspectrum(permute(obj.phi(num,1,t_start_:t),[3,1,2]), obj.t_vec(t_start_:t));
             plot(f,10*log10(p));
             hold on
+            if view_eigen   % 固有値に基づく真値の描画
+                xline(sqrt(abs(obj.param.kappa*permute(obj.sigma(2:3,1,t),[3,1,2])))/2/pi,'--k',"$f_"+string((2:3)-1)+"$",'Interpreter','latex','LineWidth',0.5,'FontSize',14)
+            end
             for mu = 1:obj.param.peak_memory_num
                 plot(obj.peak_freqs(num,mu,t),10*log10(obj.peaks(num,mu,t)),'o');
             end
@@ -336,6 +502,36 @@ classdef WaveInteractionSimulator < Simulator
             ylim([-100,20])
             xlim([0,10])
             legend(string(num))
+        end
+
+        function phaseSpacePlot(obj,t_end,mu_list,tile_layout,basis,G_)
+            % 1ステップ分の相平面プロット
+            arguments
+                obj
+                t_end = obj.param.Nt     % 時刻
+                mu_list = 0:3             % モード
+                tile_layout = [2,2]     % 描画タイルの配置
+                basis {mustBeMember(basis,["eigen","static"])} = "eigen"    % 基底の取り方
+                G_ = graph()          % 使うグラフ
+            end
+            t_vec_ = 1:t_end;
+            E = permute(obj.xi(:,1,:),[3,1,2]); %．[時刻,モード,1]なので注意
+            K = zeros(obj.param.Nt, obj.param.Na);
+            K(2:end,:) = permute(((obj.xi(:,1,2:end)-obj.xi(:,1,1:end-1))./obj.param.dt),[3,1,2]);
+
+            mu_cnt = 1; % 描画用インデックス
+            for mu = mu_list
+                subplot(tile_layout(1),tile_layout(2),mu_cnt)
+                plot(E(t_vec_,mu+1), K(t_vec_,mu+1))
+                hold on
+                plot(E(t_vec_(end),mu+1), K(t_vec_(end),mu+1),'*')
+                hold off
+                mu_cnt = mu_cnt + 1;
+                title("$\mu = "+string(mu)+", t = "+string(t_end)+"$",'Interpreter','latex')
+                xlabel("$\xi_"+string(mu)+"(t)$",'Interpreter','latex')
+                ylabel("$\dot{\xi}_"+string(mu)+"(t)$",'Interpreter','latex')
+            end
+            %obj.saveFigure(gcf, "phase_space");
         end
 
         function peakAndFreqPlot(obj,num)
@@ -382,7 +578,7 @@ classdef WaveInteractionSimulator < Simulator
                 l = legend(string(num));
                 l.NumColumns = 4;
                 ylim([-100,100])
-                xlim([0,1000])
+                %xlim([0,1000])
                 ylabel("Power of Peaks [dB]")
                 xlabel("TIme Step")
                 title("mode "+string(mu))
@@ -394,11 +590,37 @@ classdef WaveInteractionSimulator < Simulator
                 l = legend(string(num));
                 l.NumColumns = 4;
                 %ylim([-100,100])
-                xlim([0,1000])
+                %xlim([0,1000])
                 ylabel("Frequency of Peaks [Hz]")
                 xlabel("TIme Step")
                 title("mode "+string(mu))
             end
+        end
+        
+        function obj = compareEstimateAndEigenFreq(obj,num,modes)
+            % 特定エージェントのピーク周波数と，固有値から求まる真の空間周波数を比較
+            arguments
+                obj
+                num = 8 % 表示対象のエージェント
+                modes = 2:3 % 表示する固有モード
+            end
+            figure
+            for mu = 1:obj.param.peak_memory_num
+                figure
+                plot(1:obj.param.Nt, permute(obj.peak_freqs(num,mu,:),[3,1,2]))
+                hold on
+                plot(1:obj.param.Nt, sqrt(obj.param.kappa*permute(obj.sigma(modes,1,:),[3,1,2]))/2/pi,'--')
+                hold off
+                leg_str = ["$f^*_{"+string(num)+","+string(mu)+"}$", "$\sqrt{\kappa\sigma_"+string(modes-1)+"}/2\pi$"];
+                l = legend(leg_str,'Interpreter','latex');
+                l.NumColumns = 4;
+                %ylim([-100,100])
+                %xlim([0,1000])
+                ylabel("Frequency[Hz]")
+                xlabel("TIme Step")
+                title("mode "+string(mu))
+            end
+            obj.saveFigure(gcf, "estimate_eigen");
         end
 
         function obj = deadlockPlot(obj,num)
@@ -415,6 +637,7 @@ classdef WaveInteractionSimulator < Simulator
             xlim([0,obj.param.Nt])
             ylabel("is deadlock")
             xlabel("TIme Step")
+            obj.saveFigure(gcf, "deadlockPlot");
         end
 
         function obj = variancePlot(obj,num)
@@ -447,6 +670,41 @@ classdef WaveInteractionSimulator < Simulator
                 xlabel("TIme Step")
                 title("mode "+string(mu))
             end
+            obj.saveFigure(gcf, "variance");
+        end
+
+        function obj = meanVariancePlot(obj,num)
+            arguments
+                obj
+                num = 8 % 表示対象のエージェント
+            end
+            pv_mean = zeros(obj.param.Na, obj.param.peak_memory_num-1, obj.param.Nt);
+            fv_mean = zeros(obj.param.Na, obj.param.peak_memory_num-1, obj.param.Nt);
+            for t = 1:obj.param.Nt
+                if (t>obj.param.deadlock_stepwith)
+                    pv_mean_(:,:,t) = mean(obj.peak_variances_db(:,:,t-obj.param.deadlock_stepwith+1:t),3);
+                    fv_mean_(:,:,t) = mean(obj.freq_variances(:,:,t-obj.param.deadlock_stepwith+1:t),3);
+                end
+            end
+            mu = 1;
+            figure
+            plot(1:obj.param.Nt, permute(pv_mean_(num,mu,:),[3,1,2]))
+            %l = legend(string(num));
+            xlim([0,obj.param.Nt])
+            ylabel("Variance of Peak Power [dB^2]")
+            xlabel("TIme Step")
+            yline(obj.param.power_variance_db,'--r')
+            l = legend([string(num),"threshold"]);
+            title("mode "+string(mu))
+
+            figure
+            plot(1:obj.param.Nt, permute(fv_mean_(num,mu,:),[3,1,2]))
+            xlim([0,obj.param.Nt])
+            ylabel("Variance of Peak Frequency [Hz^2]")
+            xlabel("TIme Step")
+            yline(obj.param.freq_variance_hz,'--r')
+            l = legend([string(num),"threshold"]);
+            title("mode "+string(mu))
         end
 
         function obj = phaseGapPlot(obj)
@@ -458,6 +716,24 @@ classdef WaveInteractionSimulator < Simulator
             plot(obj.t_vec, permute(obj.phi(:,1,:),[1,3,2])-mean( permute(obj.phi(:,1,:),[1,3,2]), 1 ))
         end
 
+        function obj = generatePhaseSpaceMovie(obj,filename, speed)
+            arguments
+                obj
+                filename string = "phase_space.mp4" % 保存するファイル名
+                speed = 1       % 動画の再生速度
+            end
+            obj.makeMovie(@obj.phaseSpacePlot, obj.param.dt, obj.param.Nt, filename, speed, true);
+        end
+
+        function obj = generateEnergyMovie(obj,filename, speed)
+            arguments
+                obj
+                filename string = "energy.mp4" % 保存するファイル名
+                speed = 1       % 動画の再生速度
+            end
+            obj.makeMovie(@obj.energyPlot, obj.param.dt, obj.param.Nt, filename, speed, true);
+        end
+
         function obj = generateSpectrumMovie(obj,filename, speed)
             arguments
                 obj
@@ -465,6 +741,15 @@ classdef WaveInteractionSimulator < Simulator
                 speed = 1       % 動画の再生速度
             end
             obj.makeMovie(@obj.spectrumPlot, obj.param.dt, obj.param.Nt, filename, speed, true);
+        end
+
+        function obj = generatePhaseMovie(obj,filename, speed)
+            arguments
+                obj
+                filename string = "phase.mp4" % 保存するファイル名
+                speed = 1       % 動画の再生速度
+            end
+            obj.makeMovie(@obj.partPlot, obj.param.dt, obj.param.Nt, filename, speed, true);
         end
     end
 end

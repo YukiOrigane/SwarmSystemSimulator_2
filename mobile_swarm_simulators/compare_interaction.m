@@ -27,7 +27,7 @@ simulation = simulation.initializeVariables();  % 初期値の計算
 simulation = simulation.defineSystem();  % システム設定（COSの初期化）
 
 simulation = simulation.simulate(); % シミュレーションの実施
-%simulation.phasePlacePlot(399);
+%simulation.phasePlacePlot(1);
 %simulation.edgeJudgePlot(3999,1);
 %simulation.cos.relativePositionEstimate(3999,[1,5,10]);
 %simulation.generateMovie();
