@@ -23,8 +23,9 @@ simulation = simulation.setParam("placement_file","setting_files/init_conditions
 %simulation = simulation.setParam("environment_file","setting_files/environments/free.m");   % パラメタ変更
 %simulation = simulation.setParam("placement_file","setting_files/init_conditions/narrow_20.m");   % パラメタ変更
 % COS %
-simulation.cos = simulation.cos.setParam("interaction_type","diffusion");
-%simulation.cos = simulation.cos.setParam("interaction_type","wave");
+%simulation.cos = simulation.cos.setParam("interaction_type","diffusion");
+%simulation.cos = simulation.cos.setParam("kappa",1);
+simulation.cos = simulation.cos.setParam("interaction_type","wave");
 simulation.cos = simulation.cos.setParam("kappa",100);
 %simulation.cos = simulation.cos.setParam("dt",0.01);
 simulation.cos = simulation.cos.setParam("gamma",0);
@@ -40,16 +41,15 @@ simulation.cos = simulation.cos.setParam("peak_memory_num",1);
 simulation.cos = simulation.cos.setParam("deadlock_usepower",true);% true
 simulation.cos = simulation.cos.setParam("is_normalize",false);  % 相互作用の正規化を行う
 simulation.cos = simulation.cos.setParam("deadlock_stepwith",100);  % デッドロック判定期間を延長
-simulation.cos = simulation.cos.setParam("use_softtouch",true);    % ソフトタッチ使うか？
-simulation.cos = simulation.cos.setParam("use_softrelease",true);  % ソフトリリース使うか？
+simulation.cos = simulation.cos.setParam("use_softtouch",false);    % ソフトタッチ使うか？
+simulation.cos = simulation.cos.setParam("use_softrelease",false);  % ソフトリリース使うか？
 simulation.cos = simulation.cos.setParam("delta_release",0.1);      % ソフトリリースの下限値
 simulation.cos = simulation.cos.setParam("power_variance_db",2*10^-3);
 %simulation.cbf = simulation.cbf.disable();
 % 停止検知 %
-simulation = simulation.setParam("stop_timehistry",256);
-%simulation = simulation.setParam("stop_threshold",10^-3);
+simulation = simulation.setParam("stop_threshold",10^-3);
 %simulation = simulation.setParam("stop_threshold",10^-2);
-simulation = simulation.setParam("stop_threshold",0.5);
+%simulation = simulation.setParam("stop_threshold",0.5);
 % Swarm %
 simulation = simulation.setParam("kp",8);   % Swarm : 勾配追従力ゲイン
 %simulation = simulation.setParam("kp",0);   % ！！！停止注意！！！
@@ -66,8 +66,8 @@ simulation = simulation.setParam("adjacency_method", "distance");   % 隣接行�
 simulation = simulation.setParam("cbf_rs", 0.8);  % 安全距離
 simulation = simulation.setParam("cbf_gamma", 5); % ナイーブパラメタ
 % kp調整 %
-%simulation = simulation.setParam("deadlock_source","cos");
-simulation = simulation.setParam("deadlock_source","stop");
+simulation = simulation.setParam("deadlock_source","cos");
+%simulation = simulation.setParam("deadlock_source","stop");
 %simulation = simulation.setParam("do_kp_adjust",false);  % kp調整を実施？
 simulation = simulation.setParam("do_kp_adjust",true);  % kp調整を実施？
 simulation = simulation.setParam("kp_adjust_out",-0.3);
@@ -96,7 +96,7 @@ figure
 %simulation.edgeDeadlockPlot(1,2);
 %simulation.numberPlacePlot(3121,true);
 %simulation.placePlot(1,false);
-simulation.cos = simulation.cos.phaseGapPlot();
+%simulation.cos = simulation.cos.phaseGapPlot();
 % simulation.cos = simulation.cos.partPlot(3500);
 % simulation = simulation.generateMovieEstimate([],10);
 %simulation = simulation.generateMovieTrip("movie_fast.mp4",10);
@@ -116,8 +116,20 @@ simulation = simulation.setParam("is_debug_view",true);
 % simulation.kpAdjustPlot([1,5:20]);
 % simulation.minimumDistanceCheck();
 % simulation.deadlockDetectionPlot("stop");
-%simulation.deadlockDetectionPlotColor();
-%simulation.cos.phaseTimeVariancePlot();
+simulation.deadlockDetectionPlotColor();
+figure
+simulation.cos.phaseTimeVariancePlot();
+figure
+simulation.cos.phaseACPlot();
+simulation.generateMovieVariance("variance_micro_range.mp4",10);
+
+figure
+t_list = [500];
+for i = 1:length(t_list)
+    subplot(1,length(t_list),i)
+    simulation.plotVariance(t_list(i),false)
+end
+
 % simulation.stopDetect(600);
 % simulation.variancePlot([1:10]);
 % simulation.plotPositionVariance();
@@ -153,18 +165,18 @@ for t = t_list
     yticks(-8:4:8)
 end
 figure
-subplot(3,2,1)
+subplot(1,3,1)
 simulation.tripPlot(1);
-subplot(3,2,2)
-simulation.tripPlot(600);
-subplot(3,2,3)
-simulation.tripPlot(1200);
-subplot(3,2,4)
-simulation.tripPlot(1800);
-subplot(3,2,5)
-simulation.tripPlot(2400);
-subplot(3,2,6)
+subplot(1,3,2)
+simulation.tripPlot(1500);
+subplot(1,3,3)
 simulation.tripPlot(3000);
+subplot(2,2,4)
+simulation.tripPlot(3000);
+%subplot(3,2,5)
+%simulation.tripPlot(2400);
+%subplot(3,2,6)
+%simulation.tripPlot(3000);
 %}
 %{ 
 figure

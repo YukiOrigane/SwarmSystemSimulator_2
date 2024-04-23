@@ -337,6 +337,27 @@ classdef SwarmWithWaveInteractionSimulation < MobileRobots2dSimulator
             ylim([0,40])
         end
 
+        function obj = plotVariance(obj, t, delete_gca)
+            arguments
+                obj
+                t
+                delete_gca = true
+            end
+            % 停止条件に用いている分散を色として表示
+            if delete_gca
+                delete(gca)
+            end
+            obj = obj.placePlot(t,true, log10(obj.cos.phase_variances(:,:,t)));   % 拡散相互作用の場合
+            clim([-7,-3])
+            colorbar
+            colormap parula
+            if delete_gca
+                text(obj.param.space_x(2)*0.6, obj.param.space_y(2)*0.8, "t = "+string(t), 'FontSize',12);
+            else
+                title("t = "+string(t))
+            end
+        end
+
         function obj = trajectryJudgePlot(obj, step_width, num)
             % 軌跡を指定した時間幅でプロット
             % kp_adjustを利用して色を変える
@@ -473,6 +494,17 @@ classdef SwarmWithWaveInteractionSimulation < MobileRobots2dSimulator
             end
              %obj.makeMovie(@obj.edgeJudgePlot, obj.param.dt, obj.param.Nt, filename, speed, true);
             obj.makeMovie(@obj.tripPlot, obj.param.dt, obj.param.Nt, filename, speed, true);
+        end
+
+        function obj = generateMovieVariance(obj, filename, speed)
+            % 分散色表示動画作成
+            arguments
+                obj
+                filename string = "movie.mp4" % 保存するファイル名
+                speed = 1       % 動画の再生速度
+            end
+             %obj.makeMovie(@obj.edgeJudgePlot, obj.param.dt, obj.param.Nt, filename, speed, true);
+            obj.makeMovie(@obj.plotVariance, obj.param.dt, obj.param.Nt, filename, speed, true);
         end
 
         function obj = generateMovie(obj, filename, speed)

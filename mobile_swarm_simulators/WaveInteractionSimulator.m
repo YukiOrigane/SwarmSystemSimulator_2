@@ -45,7 +45,8 @@ classdef WaveInteractionSimulator < Simulator
             % 振動子系そのもの %
             % obj.param.K = 1;       % ゲイン
             obj.param.kappa = 10;      % 結合強度
-            obj.param.omega_0 = 0*ones(obj.param.Na,1);      % 固有角速度
+            rng(1)
+            obj.param.omega_0 = 5*rand(obj.param.Na,1);      % 固有角速度
             obj.param.gamma = 0;        % 粘性
             obj.param.interaction_type = "wave";    % 相互作用の形
             obj.param.is_normalize = false;     % 相互作用の正規化をするか？
@@ -66,7 +67,7 @@ classdef WaveInteractionSimulator < Simulator
             obj.param.deadlock_usepower = true; % 判定にパワーも使うか？
             obj.param.use_peak_matching = false;    % 推定にピークマッチングを導入するか？
             obj.param.number_of_matching_peaks = 3; % ピークマッチングを何点でとるか？
-            obj.param.diffusion_phase_var_threshold = 1;    % 拡散相互作用の場合の，デッドロック検出閾値
+            obj.param.diffusion_phase_var_threshold = 1e-6;    % 拡散相互作用の場合の，デッドロック検出閾値
             %%%%%%%% 読み込みファイル名 %%%%%%%%
             %obj.param.environment_file = "setting_files/environments/narrow_space.m";  % 環境ファイル
             %obj.param.placement_file = "setting_files/init_conditions/narrow_20.m";    % 初期位置ファイル
@@ -390,7 +391,7 @@ classdef WaveInteractionSimulator < Simulator
                 obj.peak_variances_db(:,:,t) = peak_variances_;
                 obj.freq_variances(:,:,t) = freq_variances_;
             end
-            obj.is_deadlock(:,:,t) = 1; %% DEBUG CODE HERE !!!!
+            %obj.is_deadlock(:,:,t) = 1; %% DEBUG CODE HERE !!!!
             % 各モードの大きさ，周波数について全ての分散が閾値を下回っていたら，デッドロックと判定
         end
 
@@ -399,7 +400,8 @@ classdef WaveInteractionSimulator < Simulator
                 return  % データがたまっていなかったらリターン
             end
                 %%% 拡散的相互作用の場合 %%%
-                phase_variances_ = var(obj.phi(:,1,t-obj.param.minimum_store:t),0,3);
+                %phase_variances_ = var(obj.phi(:,1,t-obj.param.minimum_store:t)-phi_dc_,0,3);
+                phase_variances_ = var(diff(obj.phi(:,1,t-obj.param.minimum_store:t),1,3),0,3);
                 obj.is_deadlock(:,:,t) = phase_variances_<obj.param.diffusion_phase_var_threshold;
                 obj.phase_variances(:,:,t) = phase_variances_;
         end
@@ -441,6 +443,7 @@ classdef WaveInteractionSimulator < Simulator
             arguments
                 obj
             end
+            
             plot(1:obj.param.Nt, permute(obj.phase_variances(:,1,:),[1,3,2]))
             xlim([1,obj.param.Nt]);
         end
@@ -714,6 +717,18 @@ classdef WaveInteractionSimulator < Simulator
             end
             figure
             plot(obj.t_vec, permute(obj.phi(:,1,:),[1,3,2])-mean( permute(obj.phi(:,1,:),[1,3,2]), 1 ))
+        end
+
+        function obj = phaseACPlot(obj)
+            % 固有角速度分をカットした位相時間履歴
+            arguments
+                obj
+            end
+            t_vec_ = 0:1:obj.param.Nt-1;
+            phi_dc_ = obj.param.omega_0.*permute(obj.t_vec,[1,3,2]);    % 固有角速度による上昇分をカット  
+            figure
+            %plot(t_vec_, permute(obj.phi(:,1,:)-phi_dc_,[1,3,2]));
+            plot(t_vec_, [zeros(obj.param.Na,1),permute(diff(obj.phi(:,1,:),1,3),[1,3,2])]);
         end
 
         function obj = generatePhaseSpaceMovie(obj,filename, speed)
