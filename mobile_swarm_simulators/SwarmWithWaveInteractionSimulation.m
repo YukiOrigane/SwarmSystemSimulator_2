@@ -347,10 +347,19 @@ classdef SwarmWithWaveInteractionSimulation < MobileRobots2dSimulator
             if delete_gca
                 delete(gca)
             end
-            obj = obj.placePlot(t,true, log10(obj.cos.phase_variances(:,:,t)));   % 拡散相互作用の場合
-            clim([-7,-3])
-            colorbar
-            colormap parula
+            if (obj.cos.param.interaction_type == "diffusion")
+                obj = obj.placePlot(t,true, log10(obj.cos.phase_variances(:,:,t)));   % 拡散相互作用の場合
+                colorbar
+                colormap parula
+                clim([-7,-3])
+            else
+                %obj = obj.placePlot(t,true, log10(obj.cos.freq_variances(:,:,t)));   % 振動相互作用の場合
+                obj = obj.placePlot(t,true, (obj.cos.peak_variances_db(:,:,t)));
+                colorbar
+                colormap parula
+                clim([-7,-3])
+            end
+            
             if delete_gca
                 text(obj.param.space_x(2)*0.6, obj.param.space_y(2)*0.8, "t = "+string(t), 'FontSize',12);
             else

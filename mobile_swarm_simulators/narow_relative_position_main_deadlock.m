@@ -1,4 +1,4 @@
-%%% ぐるぐる
+%%% デッドロック
 
 % こちらのファイルを実行する
 % 一発実施する
@@ -12,11 +12,12 @@ simulation.setFigureProperty("large");                  % 描画の基本設定�
 
 
 %% シミュレーションの実施 : 単発
-simulation = simulation.setParam("environment_file","setting_files/environments/square.m");   % パラメタ変更
-simulation = simulation.setParam("placement_file","setting_files/init_conditions/round_20.m");   % パラメタ変更
+%simulation = simulation.setParam("environment_file","setting_files/environments/square.m");   % パラメタ変更
+%simulation = simulation.setParam("placement_file","setting_files/init_conditions/round_20.m");   % パラメタ変更
 %simulation = simulation.setParam("placement_file","setting_files/init_conditions/round_1.m");   % パラメタ変更
 %simulation = simulation.setParam("environment_file","setting_files/environments/narrow_space_hosome_w_4.m");   % パラメタ変更
-%simulation = simulation.setParam("placement_file","setting_files/init_conditions/narrow_20.m");   % パラメタ変更
+simulation = simulation.setParam("environment_file","setting_files/environments/narrow_space_hosome.m");   % パラメタ変更
+simulation = simulation.setParam("placement_file","setting_files/init_conditions/narrow_20.m");   % パラメタ変更
 % COS %
 simulation.cos = simulation.cos.setParam("kappa",80);
 simulation.cos = simulation.cos.setParam("gamma",0);
@@ -34,11 +35,11 @@ simulation = simulation.setParam("stop_threshold",10^-3);
 simulation = simulation.setParam("kp",8);   % Swarm : 勾配追従力ゲイン
 simulation = simulation.setParam("kf",0);  % Swarm : 群形成力ゲイン
 simulation = simulation.setParam("kd",10);   % Swarm : 粘性ゲイン
-simulation = simulation.setParam("Nt",3000);
+simulation = simulation.setParam("Nt",1000);
 simulation = simulation.setParam("is_debug_view",false);
 simulation = simulation.setParam("initial_pos_variance", 0);
-%simulation = simulation.setParam("attract_force_type", "linear_fbx");
-simulation = simulation.setParam("attract_force_type", "trip");
+simulation = simulation.setParam("attract_force_type", "linear_fbx");
+%simulation = simulation.setParam("attract_force_type", "trip");
 % CBF %
 simulation = simulation.setParam("cbf_rs", 0.8);  % 安全距離
 simulation = simulation.setParam("cbf_gamma", 5); % ナイーブパラメタ
@@ -53,8 +54,8 @@ simulation = simulation.setParam("kp_adjust_in",1.2);
 simulation = simulation.setParam("adjust_stepwith",80);
 %simulation = simulation.setParam("dxdt_0",[[0 0];[0 0]]);   % パラメタ変更
 % trip %
-%simulation = simulation.setParam("trip_mode","straight");
-simulation = simulation.setParam("trip_mode","round");
+simulation = simulation.setParam("trip_mode","straight");
+%simulation = simulation.setParam("trip_mode","round");
 % 本番 %
 simulation = simulation.readSettingFiles(); % 設定ファイルの読み込み
 simulation = simulation.initializeVariables();  % 初期値の計算
@@ -128,7 +129,7 @@ simulation = SwarmWithWaveInteractionSimulation();                 % オブジ�
 simulation.setFigureProperty("large");                  % 描画の基本設定を変更
 
 
-env_list = ["setting_files/environments/narrow_space_hosome_w_4.m"];
+env_list = ["setting_files/environments/narrow_space_hosome.m"];
 source_list = ["cos","stop"];
 number_of_sets = length(env_list)*length(source_list);
 sim_per_sets = 3;
@@ -162,7 +163,8 @@ for env = env_list
             simulation = simulation.setParam("Nt",3000);
             simulation = simulation.setParam("is_debug_view",false);
             simulation = simulation.setParam("initial_pos_variance", 0.2);
-            simulation = simulation.setParam("attract_force_type", "trip");
+            %simulation = simulation.setParam("attract_force_type", "trip");
+            simulation = simulation.setParam("attract_force_type", "linear_fbx");
             simulation = simulation.setParam("trip_mode","straight");
             % CBF %
             simulation = simulation.setParam("cbf_rs", 0.8);  % 安全距離
@@ -192,8 +194,8 @@ for env = env_list
             simulation = simulation.initializeVariables();  % 初期値の計算
             simulation = simulation.defineSystem();  % システム設定（誘導場の生成）
             simulation = simulation.simulate(); % シミュレーションの実施
-            
-            save("data_0204/"+string(sets_count)+"_"+string(n)+".mat","simulation");
+            mkdir("data_0527")
+            save("data_0527/"+string(sets_count)+"_"+string(n)+".mat","simulation");
             passing(1,n) = simulation.obtainNumberOfPassedRobots();
         end
         results(sets_count,:) = {env,source,num2cell(passing,[1 2])};

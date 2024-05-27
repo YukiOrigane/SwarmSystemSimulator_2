@@ -41,15 +41,15 @@ simulation.cos = simulation.cos.setParam("peak_memory_num",1);
 simulation.cos = simulation.cos.setParam("deadlock_usepower",true);% true
 simulation.cos = simulation.cos.setParam("is_normalize",false);  % 相互作用の正規化を行う
 simulation.cos = simulation.cos.setParam("deadlock_stepwith",100);  % デッドロック判定期間を延長
-simulation.cos = simulation.cos.setParam("use_softtouch",false);    % ソフトタッチ使うか？
-simulation.cos = simulation.cos.setParam("use_softrelease",false);  % ソフトリリース使うか？
+simulation.cos = simulation.cos.setParam("use_softtouch",true);    % ソフトタッチ使うか？
+simulation.cos = simulation.cos.setParam("use_softrelease",true);  % ソフトリリース使うか？
 simulation.cos = simulation.cos.setParam("delta_release",0.1);      % ソフトリリースの下限値
 simulation.cos = simulation.cos.setParam("power_variance_db",2*10^-3);
 %simulation.cbf = simulation.cbf.disable();
 % 停止検知 %
-simulation = simulation.setParam("stop_threshold",10^-3);
+%simulation = simulation.setParam("stop_threshold",10^-3);
 %simulation = simulation.setParam("stop_threshold",10^-2);
-%simulation = simulation.setParam("stop_threshold",0.5);
+simulation = simulation.setParam("stop_threshold",0.5);
 % Swarm %
 simulation = simulation.setParam("kp",8);   % Swarm : 勾配追従力ゲイン
 %simulation = simulation.setParam("kp",0);   % ！！！停止注意！！！
