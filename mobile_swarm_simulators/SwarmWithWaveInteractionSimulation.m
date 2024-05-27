@@ -152,7 +152,7 @@ classdef SwarmWithWaveInteractionSimulation < MobileRobots2dSimulator
                 figure
                 obj.placePlot(t,true);
                 hold on
-                quiver(obj.x(:,1,t),obj.x(:,2,t),u_p(:,1),u_p(:,2));    % 勾配追従力プロット
+                quiver(obj.x(:,1,t),obj.x(:,2,t),u_p(:,1),u_p(:,2),1.5);    % 勾配追従力プロット
             end
             %%%% 連結性の判定 %%%%
             Lap_ = full(laplacian(obj.G));  % グラフラプラシアン
@@ -216,14 +216,17 @@ classdef SwarmWithWaveInteractionSimulation < MobileRobots2dSimulator
             hold off
         end
 
-        function obj = edgeDeadlockPlot(obj,t,dim)
+        function obj = edgeDeadlockPlot(obj,t,dim,is_delete)
             % ロボットの相対位置推定+デッドロック判定プロット
             arguments
                 obj
                 t               % 時刻
                 dim = 2         % 次元
+                is_delete = true
             end
-            delete(gca)
+            if (is_delete)
+                delete(gca)
+            end
             obj = obj.placePlot(t,false, (-1+2*obj.cos.is_edge(:,dim,t)).*obj.cos.is_deadlock(:,1,t));
             clim([-1,1])
             colorbar

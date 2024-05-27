@@ -12,12 +12,12 @@ simulation.setFigureProperty("large");                  % 描画の基本設定�
 
 
 %% シミュレーションの実施 : 単発
-simulation = simulation.setParam("environment_file","setting_files/environments/narrow_space_hosome.m");   % パラメタ変更
+simulation = simulation.setParam("environment_file","setting_files/environments/narrow_space_w_2_5_vertical_short.m");   % パラメタ変更
 simulation = simulation.setParam("placement_file","setting_files/init_conditions/narrow_40.m");   % パラメタ変更
 % COS %
-simulation.cos = simulation.cos.setParam("kappa",100);
+simulation.cos = simulation.cos.setParam("kappa",80);
 simulation.cos = simulation.cos.setParam("do_estimate",true);
-simulation.cos = simulation.cos.setParam("time_histry",256);
+simulation.cos = simulation.cos.setParam("time_histry",256); 
 simulation.cos = simulation.cos.setParam("power_threshold",10^-7);
 %simulation.cbf = simulation.cbf.disable();
 % 停止検知 %
@@ -56,7 +56,7 @@ simulation.placePlot(1);
 % simulation = simulation.generateMovieEstimate();
 simulation = simulation.generateMovieEstimate();
 simulation = simulation.setParam("is_debug_view",true);
-simulation = simulation.calcControlInput(750);
+simulation = simulation.calcControlInput(10);
 simulation.cos.relativePositionEstimate(750,[8,9,10]);  % 推定デバッグ表示
 simulation.cos.peakAndFreqPlot([8,9,10]);   % エージェント毎ピーク履歴
 simulation.cos.peakAndFreqPlot2([1,5:20]);   % モード毎ピーク履歴
@@ -70,22 +70,22 @@ simulation.cos.peakAndFreqPlot2([1,5:20]);   % モード毎ピーク履歴
 % simulation.stopDetect(600);
 % simulation.variancePlot([1,5:20]);
 simulation.obtainNumberOfPassedRobots();
-%{ 
+ 
 figure
 subplot(2,2,1)
-simulation.trajectryJudgePlot([2:400]);
+simulation.edgeDeadlockPlot(1,2,false);
 subplot(2,2,2)
-simulation.trajectryJudgePlot([401:800]);
+simulation.edgeDeadlockPlot(225,2,false);
 subplot(2,2,3)
-simulation.trajectryJudgePlot([801:1200]);
+simulation.edgeDeadlockPlot(450,2,false);
 subplot(2,2,4)
-simulation.trajectryJudgePlot([1201:1600]);
+simulation.edgeDeadlockPlot(675,2,false);
 figure
 subplot(1,2,1)
 simulation.trajectryJudgePlot([1601:2000]);
 subplot(1,2,2)
 simulation.trajectryJudgePlot([2001:3000]);
-%}
+
 %% シミュレーションの実施 : 回す
 addpath(genpath("../../../SwarmSystemSimulator_2/"))    % パスを通す
 simulation = SwarmWithWaveInteractionSimulation();                 % オブジェクトの定義
