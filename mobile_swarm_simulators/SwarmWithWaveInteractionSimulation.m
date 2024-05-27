@@ -107,6 +107,8 @@ classdef SwarmWithWaveInteractionSimulation < MobileRobots2dSimulator
                     u_p(i,:) = obj.param.kp*obj.kp_adjust(i,:,t)*( cx*[1 0] + cy*[0 1] )/norm([cx,cy]);  % 誘導場を利用
                 elseif obj.param.attract_force_type == "linear_fbx"
                     u_p(i,:) = obj.param.kp*obj.kp_adjust(i,:,t)*( [1 0] );  % ただのx方向への単位ベクトル
+                elseif obj.param.attract_force_type == "linear_fbxy"
+                    u_p(i,:) = obj.param.kp*obj.kp_adjust(i,:,t)*( [1 0] - [0 1]*obj.x(i,2,t) );  % x方向への単位ベクトルと，y=0への線形FB
                 end
                 % u_p = kp( c_x ex + c_y ey )
             end

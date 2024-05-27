@@ -13,7 +13,7 @@ simulation.setFigureProperty("large");                  % 描画の基本設定�
 
 %% シミュレーションの実施 : 単発
 simulation = simulation.setParam("environment_file","setting_files/environments/narrow_space_hosome.m");   % パラメタ変更
-simulation = simulation.setParam("placement_file","setting_files/init_conditions/narrow_20.m");   % パラメタ変更
+simulation = simulation.setParam("placement_file","setting_files/init_conditions/narrow_40.m");   % パラメタ変更
 % COS %
 simulation.cos = simulation.cos.setParam("kappa",100);
 simulation.cos = simulation.cos.setParam("do_estimate",true);
@@ -30,7 +30,8 @@ simulation = simulation.setParam("kd",10);   % Swarm : 粘性ゲイン
 simulation = simulation.setParam("Nt",2000);
 simulation = simulation.setParam("is_debug_view",false);
 simulation = simulation.setParam("initial_pos_variance", 0);
-simulation = simulation.setParam("attract_force_type", "linear_fbx");
+%simulation = simulation.setParam("attract_force_type", "linear_fbx");
+simulation = simulation.setParam("attract_force_type", "linear_fbxy");
 % CBF %
 simulation = simulation.setParam("cbf_rs", 0.8);  % 安全距離
 simulation = simulation.setParam("cbf_gamma", 5); % ナイーブパラメタ

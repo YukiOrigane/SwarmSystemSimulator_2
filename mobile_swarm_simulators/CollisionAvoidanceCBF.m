@@ -95,7 +95,10 @@ classdef CollisionAvoidanceCBF
             u = (u_nominal.' + delta_u).';
             %{  %　デバッグ
             if flag ~= 1
-                disp("missied")
+                 disp("CBF missied "+string(flag))
+                u = 0*u_nominal;    % だめなら入力なしに
+            else
+                u = (u_nominal.' + delta_u).';  % CBF解あり
             end
             %}
         end
