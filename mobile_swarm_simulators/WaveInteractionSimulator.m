@@ -58,7 +58,7 @@ classdef WaveInteractionSimulator < Simulator
             obj.param.is_judge_continuous = false;  % 内外判定結果を連続量にするか？
             obj.param.time_histry = 2048;     % パワースペクトラムで，どれくらい前の時刻情報まで使うか？
             obj.param.minimum_store = 64;     % ここまでデータたまるまではスタートしない
-            obj.param.power_threshold_dB = 10^-10;
+            obj.param.power_threshold_dB = -100;
             obj.param.prominence_threshold_dB = 1;
             obj.param.peak_memory_num = 2;   % ピーク情報を何次まで記録するか
             obj.param.power_variance_db = 10^-3; % デッドロック判定時のパワー分散閾値
