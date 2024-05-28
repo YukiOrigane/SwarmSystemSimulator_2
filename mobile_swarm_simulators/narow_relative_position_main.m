@@ -54,7 +54,7 @@ simulation.edgeDeadlockPlot(2000,2);
 simulation.placePlot(1);
 % simulation.cos = simulation.cos.plot();
 % simulation = simulation.generateMovieEstimate();
-simulation = simulation.generateMovieEstimate();
+simulation = simulation.generateMovieEstimate("0528_movie_2times.mp4",2);
 simulation = simulation.setParam("is_debug_view",true);
 simulation = simulation.calcControlInput(10);
 simulation.cos.relativePositionEstimate(750,[8,9,10]);  % 推定デバッグ表示
