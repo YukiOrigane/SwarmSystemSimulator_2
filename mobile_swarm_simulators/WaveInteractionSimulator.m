@@ -50,7 +50,7 @@ classdef WaveInteractionSimulator < Simulator
             obj.param.gamma = 0;        % 粘性
             obj.param.interaction_type = "wave";    % 相互作用の形
             obj.param.is_normalize = false;     % 相互作用の正規化をするか？
-            obj.param.use_softtouch = true;     % ソフトタッチを使うか？
+            obj.param.use_softtouch = false;     % ソフトタッチを使うか？
             obj.param.use_softrelease = false;     % ソフトリリースを使うか？
             obj.param.delta_release = 0.1;     % ソフトリリースの位相差下限値
             % 各種推定 %
@@ -479,7 +479,7 @@ classdef WaveInteractionSimulator < Simulator
                 obj
                 t       % 時刻
                 view_eigen = true   % 固有値ベースの真値を描画するか？
-                num = [9,10]    % エージェント番号
+                num = [8,9,10]    % エージェント番号
             end
             if t<obj.param.minimum_store    % 蓄積データ少ない間は推定しない
                 return
@@ -501,9 +501,12 @@ classdef WaveInteractionSimulator < Simulator
                 plot(obj.peak_freqs(num,mu,t),10*log10(obj.peaks(num,mu,t)),'o');
             end
             hold off
-            text(max(f)*0.7, 0, "t = "+string(t), 'FontSize',12);
+            %text(max(f)*0.7, 0, "t = "+string(t), 'FontSize',12);
+            text(3, 0, "t = "+string(t), 'FontSize',12);
             ylim([-100,20])
-            xlim([0,10])
+            xlim([0,6])
+            xlabel("Frequency (Hz)")
+            ylabel("Power (dB)")
             legend(string(num))
         end
 

@@ -231,7 +231,7 @@ classdef MobileRobots2dSimulator < Simulator
                 view_edge = false                    % エッジ表示するか？
             end
             obj.placePlot(t,view_edge);
-            text(obj.x(:,1,t)-0.1,obj.x(:,2,t)-0.1,string(1:obj.param.Na),'FontSize',12);
+            text(obj.x(:,1,t)-0,obj.x(:,2,t)-0.5,string(1:obj.param.Na),'FontSize',12);
         end
 
         function obj = showEdges(obj,t)

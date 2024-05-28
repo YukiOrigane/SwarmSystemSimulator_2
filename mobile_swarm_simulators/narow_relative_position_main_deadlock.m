@@ -23,10 +23,11 @@ simulation.cos = simulation.cos.setParam("kappa",80);
 simulation.cos = simulation.cos.setParam("gamma",0);
 simulation.cos = simulation.cos.setParam("do_estimate",true);
 simulation.cos = simulation.cos.setParam("time_histry",256);
-simulation.cos = simulation.cos.setParam("power_threshold_dB",-80);
+simulation.cos = simulation.cos.setParam("power_threshold_dB",-70);
 simulation.cos = simulation.cos.setParam("peak_memory_num",1);
 simulation.cos = simulation.cos.setParam("deadlock_usepower",true);
 simulation.cos = simulation.cos.setParam("is_normalize",false);  % 相互作用の正規化を行う
+simulation.cos = simulation.cos.setParam("use_softtouch",false);
 %simulation.cbf = simulation.cbf.disable();
 % 停止検知 %
 simulation = simulation.setParam("stop_timehistry",256);
@@ -62,13 +63,20 @@ simulation = simulation.readSettingFiles(); % 設定ファイルの読み込み
 simulation = simulation.initializeVariables();  % 初期値の計算
 simulation = simulation.defineSystem();  % システム設定（誘導場の生成）
 simulation = simulation.simulate(); % シミュレーションの実施
+
+folder_name = "data"+string(datetime('now','Format','yyyyMMdd/HH_mm_ss'));
+% folder_name = "Nt3000_stop";
+simulation = simulation.setParam("folder_name",folder_name);
+simulation.cos = simulation.cos.setParam("folder_name",folder_name);
+mkdir(folder_name);
+save(folder_name+"/simulation.mat")
 %% 描画とか
 figure
 simulation.edgeDeadlockPlot(1,2);
 simulation.placePlot(2900,true);
 % simulation.cos = simulation.cos.plot(true);
 % simulation = simulation.generateMovieEstimate([],10);
-% simulation = simulation.generateMovieTrip();
+% simulation = simulation.generateMovieTrip("trip.mp4");
 simulation = simulation.generateMovieEstimate();
 simulation = simulation.setParam("is_debug_view",true);
 simulation = simulation.calcControlInput(750);
@@ -76,7 +84,8 @@ simulation.cos.relativePositionEstimate(750,[8,9,10]);  % 推定デバッグ表�
 simulation.cos.peakAndFreqPlot([8,9,10]);   % エージェント毎ピーク履歴
 simulation.cos.peakAndFreqPlot2([1,5:20]);   % モード毎ピーク履歴
 % simulation.cos.spectrumPlot(1500,8);   % 特定時刻スペクトラムプロット
-% simulation.cos.generateSpectrumMovie();
+% simulation.cos.generateSpectrumMovie("spectrum.mp4");
+% simulation.numberPlacePlot(400,true);
 % simulation.cos.deadlockPlot([1,5:20]);
 % simulation.cos.variancePlot([1:20]);
 % simulation.kpAdjustPlot([1,5:20]);
@@ -86,6 +95,15 @@ simulation.cos.peakAndFreqPlot2([1,5:20]);   % モード毎ピーク履歴
 % simulation.variancePlot([1:20]);
 % simulation.plotPositionVariance();
 simulation.obtainNumberOfPassedRobots();
+
+t_list = [85 100 115; 130 145 160; 175 190 205];
+figure
+i = 1;
+for t = reshape(t_list.',[1,size(t_list,1)*size(t_list,2)])
+    subplot(size(t_list,1),size(t_list,2),i);
+    simulation.cos.spectrumPlot(t,true,[8,9,10]);
+    i = i+1;
+end
 %{
 t_list = [1 600 1200 1800];
 for t = t_list
