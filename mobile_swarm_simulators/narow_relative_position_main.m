@@ -12,8 +12,8 @@ simulation.setFigureProperty("large");                  % 描画の基本設定�
 
 
 %% シミュレーションの実施 : 単発
-simulation = simulation.setParam("environment_file","setting_files/environments/narrow_space_w_2_5_vertical_short.m");   % パラメタ変更
-simulation = simulation.setParam("placement_file","setting_files/init_conditions/narrow_40.m");   % パラメタ変更
+simulation = simulation.setParam("environment_file","setting_files/environments/narrow_space_w_2_5_vertical.m");   % パラメタ変更
+simulation = simulation.setParam("placement_file","setting_files/init_conditions/narrow_20.m");   % パラメタ変更
 % COS %
 simulation.cos = simulation.cos.setParam("kappa",80);
 simulation.cos = simulation.cos.setParam("do_estimate",true);
@@ -27,7 +27,7 @@ simulation = simulation.setParam("stop_threshold",10^-3);
 simulation = simulation.setParam("kp",8);   % Swarm : 勾配追従力ゲイン
 simulation = simulation.setParam("kf",0);  % Swarm : 群形成力ゲイン
 simulation = simulation.setParam("kd",10);   % Swarm : 粘性ゲイン
-simulation = simulation.setParam("Nt",2000);
+simulation = simulation.setParam("Nt",1000);
 simulation = simulation.setParam("is_debug_view",false);
 simulation = simulation.setParam("initial_pos_variance", 0);
 %simulation = simulation.setParam("attract_force_type", "linear_fbx");
@@ -35,16 +35,19 @@ simulation = simulation.setParam("attract_force_type", "linear_fbxy");
 % CBF %
 simulation = simulation.setParam("cbf_rs", 0.8);  % 安全距離
 simulation = simulation.setParam("cbf_gamma", 5); % ナイーブパラメタ
+simulation = simulation.setParam("cbf_lb", []); % 入力下限 ex) [-10; -10]
+simulation = simulation.setParam("cbf_ub", []); % 入力上限 ex) [10; 10]
 % kp調整 %
 simulation = simulation.setParam("deadlock_source","cos");
 simulation = simulation.setParam("do_kp_adjust",true);  % kp調整を実施？
-simulation = simulation.setParam("kp_adjust_out",-0.3);
+simulation = simulation.setParam("kp_adjust_out",-0.1);
 %simulation = simulation.setParam("kp_adjust_in",-0.3);
 simulation = simulation.setParam("kp_adjust_in",1.2);
 simulation = simulation.setParam("adjust_stepwith",80);
 %simulation = simulation.setParam("dxdt_0",[[0 0];[0 0]]);   % パラメタ変更
 % 本番 %
 simulation = simulation.readSettingFiles(); % 設定ファイルの読み込み
+rng(0);     % 乱数の固定
 simulation = simulation.initializeVariables();  % 初期値の計算
 simulation = simulation.defineSystem();  % システム設定（誘導場の生成）
 simulation = simulation.simulate(); % シミュレーションの実施
@@ -54,7 +57,7 @@ simulation.edgeDeadlockPlot(2000,2);
 simulation.placePlot(1);
 % simulation.cos = simulation.cos.plot();
 % simulation = simulation.generateMovieEstimate();
-simulation = simulation.generateMovieEstimate("0528_movie_2times.mp4",2);
+simulation = simulation.generateMovieEstimate("0611_kout_001_1times.mp4",1);
 simulation = simulation.setParam("is_debug_view",true);
 simulation = simulation.calcControlInput(10);
 simulation.cos.relativePositionEstimate(750,[8,9,10]);  % 推定デバッグ表示
@@ -69,17 +72,19 @@ simulation.cos.peakAndFreqPlot2([1,5:20]);   % モード毎ピーク履歴
 % simulation.deadlockDetectionPlot("result");
 % simulation.stopDetect(600);
 % simulation.variancePlot([1,5:20]);
+% simulation.lambdaPlot();
+% simulation.controlInputPlot();
 simulation.obtainNumberOfPassedRobots();
  
 figure
 subplot(2,2,1)
 simulation.edgeDeadlockPlot(1,2,false);
 subplot(2,2,2)
-simulation.edgeDeadlockPlot(225,2,false);
+simulation.edgeDeadlockPlot(240,2,false);
 subplot(2,2,3)
-simulation.edgeDeadlockPlot(450,2,false);
+simulation.edgeDeadlockPlot(480,2,false);
 subplot(2,2,4)
-simulation.edgeDeadlockPlot(675,2,false);
+simulation.edgeDeadlockPlot(720,2,false);
 figure
 subplot(1,2,1)
 simulation.trajectryJudgePlot([1601:2000]);

@@ -10,6 +10,8 @@ classdef CollisionAvoidanceCBF
         devide = false  % 分割化されているCBFか？ true なら Lghの前の係数が2に
         A               % 非線形制約の左辺の行列(Au \leq b) [制約数, 空間次元]
         b               % 非線形制約の右辺のベクトル [制約数, 1]
+        lb              % 入力の下限
+        ub              % 入力の上限
         options         % 最適化オプション
         enable_cbf = true   % CBFを使うか？（falseにするのはデバッグのとき）
     end
@@ -72,15 +74,28 @@ classdef CollisionAvoidanceCBF
             obj.b = [obj.b; Lfh + gammah];
         end
 
+        function obj = addInputMinMaxConstraint(obj,lb_,ub_)
+            arguments
+                obj
+                lb_     % 入力下限 [空間次元,1]
+                ub_     % 入力上限 [空間次元,1]
+            end
+            obj.lb = lb_;
+            obj.ub = ub_;
+        end
+
         function obj = clearConstraints(obj)
             % 制約不等式をクリア
             obj.A = [];
             obj.b = [];
+            obj.lb = [];
+            obj.ub = [];
         end
 
-        function u = apply(obj,u_nominal)
+        function [u,lambda] = apply(obj,u_nominal)
             % ノミナル入力に対しCBF制約を適用
             % @return 制約後の入力 [1,空間次元]のベクトル
+            % @return 制約のラグランジュ定数
             arguments
                 obj
                 u_nominal   % ノミナル入力．[1,空間次元]のベクトル
@@ -91,7 +106,17 @@ classdef CollisionAvoidanceCBF
             end
             dim = length(u_nominal);
             delta_u = zeros(dim,1); % u-\bar{u}ノミナル入力との差 [空間次元,1]ベクトル
-            [delta_u,~,flag] = quadprog(eye(dim), zeros(dim,1), obj.A, obj.b-obj.A*u_nominal.',[],[],[],[],[],obj.options);    % A\delta u\leq b-A\hat{u}
+            if isempty(obj.lb)
+                lb_ = [];
+            else
+                lb_ = obj.lb-u_nominal.';
+            end
+            if isempty(obj.ub)
+                ub_ = [];
+            else
+                ub_ = obj.ub-u_nominal.';
+            end
+            [delta_u,~,flag,~,lambda] = quadprog(eye(dim), zeros(dim,1), obj.A, obj.b-obj.A*u_nominal.',[],[],lb_,ub_,[],obj.options);    % A\delta u\leq b-A\hat{u}
             u = (u_nominal.' + delta_u).';
             %{  %　デバッグ
             if flag ~= 1

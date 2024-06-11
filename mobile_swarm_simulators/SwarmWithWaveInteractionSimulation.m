@@ -8,6 +8,8 @@ classdef SwarmWithWaveInteractionSimulation < MobileRobots2dSimulator
         is_connected = true     % グラフが連結かどうか
         kp_adjust       % 勾配追従力の調整係数[台数,1,時刻]
         is_deadlock     % デッドロック状態か？ COSからもらったり停止検出を使ったり [台数,1,時刻]
+        lambda_history_lower  % ラグランジュ乗数履歴 [台数,次元,時刻]
+        lambda_history_upper  % ラグランジュ乗数履歴 [台数,次元,時刻]
     end
 
     methods
@@ -38,6 +40,8 @@ classdef SwarmWithWaveInteractionSimulation < MobileRobots2dSimulator
             % CBF %
             obj.param.cbf_rs = 0.8;         % 安全距離
             obj.param.cbf_gamma = 5;        % ナイーブパラメタ
+            obj.param.cbf_lb = [-2; -2];    % 入力下限      
+            obj.param.cbf_ub = [2; 2];      % 入力上限
         end
         
         function obj = initializeVariables(obj)
@@ -47,6 +51,8 @@ classdef SwarmWithWaveInteractionSimulation < MobileRobots2dSimulator
             obj.cos = obj.cos.setParam("phi_0",rand(obj.param.Na,1));
             obj.kp_adjust = ones(obj.param.Na,1,obj.param.Nt);          % kp補正係数．標準は1
             obj.is_deadlock = zeros(obj.param.Na,1,obj.param.Nt);
+            obj.lambda_history_lower = zeros(obj.param.Na,2,obj.param.Nt);
+            obj.lambda_history_upper = zeros(obj.param.Na,2,obj.param.Nt);
         end
         
         function obj = defineSystem(obj)
@@ -139,8 +145,12 @@ classdef SwarmWithWaveInteractionSimulation < MobileRobots2dSimulator
                 obj.cbf = obj.cbf.setParameters(1,obj.param.cbf_rs,obj.param.dt,obj.param.cbf_gamma,false);
                 obj.cbf = obj.cbf.addConstraints(permute(x_io(i,:,:),[3,2,1]), -repmat(obj.dxdt(i,:,t),length(x_io(i,:,:)),1));
                 % 壁との相対位置ベクトルと，自身の速度ベクトル(壁との相対速度ベクトル)をCBFに入れる
+                % 入力範囲の制限 %
+                obj.cbf = obj.cbf.addInputMinMaxConstraint(obj.param.cbf_lb,obj.param.cbf_ub);
                 % CBFの適用 %
-                u_t(i,:) = obj.cbf.apply(u_nominal(i,:));
+                [u_t(i,:),lambda_] = obj.cbf.apply(u_nominal(i,:));
+                obj.lambda_history_lower(i,:,t) = (lambda_.lower).';
+                obj.lambda_history_upper(i,:,t) = (lambda_.upper).';
                 obj.cbf = obj.cbf.clearConstraints();
             end
 
@@ -262,6 +272,34 @@ classdef SwarmWithWaveInteractionSimulation < MobileRobots2dSimulator
             clim([0,1])
             colorbar
             text(obj.param.space_x(2)*0.7, obj.param.space_y(2)*0.8, "t = "+string(t), 'FontSize',12);
+            hold off
+        end
+
+        function obj = lambdaPlot(obj)
+            % ラグランジュ乗数のチェック
+            arguments
+                obj
+            end
+            %delete(gca)
+            semilogy(1:obj.param.Nt, permute(max(obj.lambda_history_lower(:,:,:),[],[1,2]),[3,1,2]));
+            hold on
+            semilogy(1:obj.param.Nt, permute(max(obj.lambda_history_upper(:,:,:),[],[1,2]),[3,1,2]));
+            legend("lower","upper")
+            hold off
+        end
+
+        function obj = controlInputPlot(obj)
+            % 制御入力列のチェック
+            arguments
+                obj
+            end
+            plot(1:obj.param.Nt, permute(max(obj.u(:,:,:)+ obj.param.kd*obj.dxdt(:,:,:),[],[1,2]),[3,1,2]));    % 粘性項が入った後の入力を記録しているので，CBF後を見るならこう
+            hold on
+            plot(1:obj.param.Nt, permute(min(obj.u(:,:,:)+ obj.param.kd*obj.dxdt(:,:,:),[],[1,2]),[3,1,2]));
+            legend("max","min")
+            xlabel("timestep")
+            ylim([-100 100])
+            ylabel("$\max[u_i]$",'Interpreter','latex')
             hold off
         end
         
