@@ -6,6 +6,7 @@ classdef WaveInteractionSimulator < Simulator
         % システムの変数を記載
         t_vec     % 固有時刻ベクトル
         phi       % 位相 [台数,1,時刻]
+        sigma     % 固有値 [台数,1,時刻]
         %dphidt   % ロボット速さ [台数,1,時刻]
         %u         % 入力
         G         % グラフオブジェクト．MATLABのgraph参照
@@ -65,6 +66,7 @@ classdef WaveInteractionSimulator < Simulator
             % 状態変数の定義と初期値の代入を行うこと
             obj.t_vec = 0:obj.param.dt:obj.param.dt*(obj.param.Nt-1); % 時刻ベクトルの定義
             obj.phi(:,:,:) = zeros(obj.param.Na, 1, obj.param.Nt);    % 状態変数の定義
+            obj.sigma(:,:,:) = zeros(obj.param.Na, 1, obj.param.Nt);    % 状態変数の定義
             obj.phi_x(:,:,:) = zeros(obj.param.Na, 2, obj.param.Nt);    % 状態変数の定義
             obj.phi(:,:,1) = obj.param.phi_0;   % 初期値の代入
             obj.x(:,:,:) = zeros(obj.param.Na, 2, obj.param.Nt);    % 状態変数の定義
@@ -120,6 +122,8 @@ classdef WaveInteractionSimulator < Simulator
                 obj.phi(:,:,t+1) = obj.phi(:,:,t) + obj.param.dt*(obj.param.omega_0 ...
                     -obj.param.kappa*full(laplacian(obj.G))*obj.phi(:,:,t));
             end
+            [~,D_] = eig(full(laplacian(obj.G)));
+            obj.sigma(:,1,t) = diag(D_);
         end
         
         function obj = calcPartialDerivative(obj,t)
