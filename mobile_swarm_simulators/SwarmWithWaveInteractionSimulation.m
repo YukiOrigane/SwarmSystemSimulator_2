@@ -31,6 +31,7 @@ classdef SwarmWithWaveInteractionSimulation < MobileRobots2dSimulator
             obj.param.kd = 1;   % 粘性項
             obj.param.attract_force_type = "field_xy";% x方向のみ誘導力の形式
             obj.param.is_debug_view = false;    % デバッグ表示をするか？
+            obj.param.minimal_u = 1e-6;         % これ以下の入力を打ち切る
             % kp調整 %
             obj.param.deadlock_source = "cos";   % デッドロック判定のソースは？
             obj.param.do_kp_adjust = false; % デッドロック時のkp調整を実施？
@@ -155,6 +156,7 @@ classdef SwarmWithWaveInteractionSimulation < MobileRobots2dSimulator
             end
 
             %%%% 最終的な入力の生成 %%%%
+            u_t = u_t .* vecnorm(u_t,2,2)>obj.param.minimal_u;                 % 入力が小さすぎる場合は打ち切り
             obj.u(:,:,t) = u_t - obj.param.kd*obj.dxdt(:,:,t);  % CBF後に粘性が入っている…
 
             %%%% デバッグ %%%%

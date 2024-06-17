@@ -14,8 +14,8 @@ simulation.setFigureProperty("large");                  % 描画の基本設定�
 %% シミュレーションの実施 : 単発
 simulation = simulation.setParam("environment_file","setting_files/environments/narrow_space_w_2_5_vertical_short.m");   % パラメタ変更
 %simulation = simulation.setParam("environment_file","setting_files/environments/narrow_space_w_2_5_vertical.m");   % パラメタ変更
-%simulation = simulation.setParam("placement_file","setting_files/init_conditions/narrow_20.m");   % パラメタ変更
-simulation = simulation.setParam("placement_file","setting_files/init_conditions/read_mat_file.m");   % パラメタ変更
+simulation = simulation.setParam("placement_file","setting_files/init_conditions/narrow_20.m");   % パラメタ変更
+%simulation = simulation.setParam("placement_file","setting_files/init_conditions/read_mat_file.m");   % パラメタ変更
 % COS %
 simulation.cos = simulation.cos.setParam("kappa",80);
 simulation.cos = simulation.cos.setParam("do_estimate",true);
@@ -65,7 +65,7 @@ simulation = simulation.calcControlInput(10);
 simulation.cos.relativePositionEstimate(750,[8,9,10]);  % 推定デバッグ表示
 simulation.cos.peakAndFreqPlot([8,9,10]);   % エージェント毎ピーク履歴
 simulation.cos.peakAndFreqPlot2([1,5:20]);   % モード毎ピーク履歴
-% simulation.cos.spectrumPlot(1300,[9,10]);   % 特定時刻スペクトラムプロット
+% simulation.cos.spectrumPlot(200,[9,10]);   % 特定時刻スペクトラムプロット
 % simulation.cos.generateSpectrumMovie("0617_Na20.mp4");
 % simulation.cos.deadlockPlot([1,5:20]);
 % simulation.cos.variancePlot([1,5:20]);
