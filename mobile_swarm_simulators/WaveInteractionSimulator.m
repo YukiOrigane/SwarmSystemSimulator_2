@@ -295,11 +295,12 @@ classdef WaveInteractionSimulator < Simulator
             plot(obj.t_vec, permute(obj.phi(:,1,:),[1,3,2]))
         end
 
-        function obj = spectrumPlot(obj,t,num)
+        function obj = spectrumPlot(obj,t,view_eigen,num)
             % 指定エージェントのスペクトラムを描画
             arguments
                 obj
                 t       % 時刻
+                view_eigen = true; % 固有値に基づく真値をプロットするか？
                 num = [9,10]    % エージェント番号
             end
             if t<obj.param.minimum_store    % 蓄積データ少ない間は推定しない
@@ -315,6 +316,9 @@ classdef WaveInteractionSimulator < Simulator
             [p,f] = pspectrum(permute(obj.phi(num,1,t_start_:t),[3,1,2]), obj.t_vec(t_start_:t));
             plot(f,10*log10(p));
             hold on
+            if view_eigen   % 固有値に基づく真値の描画
+                xline(sqrt(abs(obj.param.kappa*permute(obj.sigma(2:3,1,t),[3,1,2])))/2/pi,'--k',"$f_"+string((2:3)-1)+"$",'Interpreter','latex','LineWidth',0.5,'FontSize',14)
+            end
             for mu = 1:obj.param.peak_memory_num
                 plot(obj.peak_freqs(num,mu,t),10*log10(obj.peaks(num,mu,t)),'o');
             end

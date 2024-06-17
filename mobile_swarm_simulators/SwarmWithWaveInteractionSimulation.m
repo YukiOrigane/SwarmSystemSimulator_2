@@ -237,7 +237,7 @@ classdef SwarmWithWaveInteractionSimulation < MobileRobots2dSimulator
             if (is_delete)
                 delete(gca)
             end
-            obj = obj.placePlot(t,false, (-1+2*obj.cos.is_edge(:,dim,t)).*obj.cos.is_deadlock(:,1,t));
+            obj = obj.placePlot(t,true, (-1+2*obj.cos.is_edge(:,dim,t)).*obj.cos.is_deadlock(:,1,t));
             clim([-1,1])
             colorbar
             text(obj.param.space_x(2)*0.65, obj.param.space_y(2)*0.8, "t = "+string(t), 'FontSize',12);

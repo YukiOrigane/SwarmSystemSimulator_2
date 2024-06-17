@@ -12,8 +12,9 @@ simulation.setFigureProperty("large");                  % 描画の基本設定�
 
 
 %% シミュレーションの実施 : 単発
-simulation = simulation.setParam("environment_file","setting_files/environments/narrow_space_w_2_5_vertical_short.m");   % パラメタ変更
-simulation = simulation.setParam("placement_file","setting_files/init_conditions/narrow_40.m");   % パラメタ変更
+%simulation = simulation.setParam("environment_file","setting_files/environments/narrow_space_w_2_5_vertical_short.m");   % パラメタ変更
+simulation = simulation.setParam("environment_file","setting_files/environments/narrow_space_w_2_5_vertical.m");   % パラメタ変更
+simulation = simulation.setParam("placement_file","setting_files/init_conditions/narrow_20.m");   % パラメタ変更
 % COS %
 simulation.cos = simulation.cos.setParam("kappa",80);
 simulation.cos = simulation.cos.setParam("do_estimate",true);
@@ -27,7 +28,7 @@ simulation = simulation.setParam("stop_threshold",10^-3);
 simulation = simulation.setParam("kp",8);   % Swarm : 勾配追従力ゲイン
 simulation = simulation.setParam("kf",0);  % Swarm : 群形成力ゲイン
 simulation = simulation.setParam("kd",10);   % Swarm : 粘性ゲイン
-simulation = simulation.setParam("Nt",2000);
+simulation = simulation.setParam("Nt",1500);
 simulation = simulation.setParam("is_debug_view",false);
 simulation = simulation.setParam("initial_pos_variance", 0);
 %simulation = simulation.setParam("attract_force_type", "linear_fbx");
@@ -53,18 +54,18 @@ simulation = simulation.defineSystem();  % システム設定（誘導場の生�
 simulation = simulation.simulate(); % シミュレーションの実施
 %% 描画とか
 figure
-simulation.edgeDeadlockPlot(2000,2);
+simulation.edgeDeadlockPlot(290,2);
 simulation.placePlot(1);
 % simulation.cos = simulation.cos.plot();
 % simulation = simulation.generateMovieEstimate();
-simulation = simulation.generateMovieEstimate("0611_Na40.mp4",8);
+simulation = simulation.generateMovieEstimate("0617_Na20_motion.mp4",8);
 simulation = simulation.setParam("is_debug_view",true);
 simulation = simulation.calcControlInput(10);
 simulation.cos.relativePositionEstimate(750,[8,9,10]);  % 推定デバッグ表示
 simulation.cos.peakAndFreqPlot([8,9,10]);   % エージェント毎ピーク履歴
 simulation.cos.peakAndFreqPlot2([1,5:20]);   % モード毎ピーク履歴
-% simulation.cos.spectrumPlot(750,8);   % 特定時刻スペクトラムプロット
-% simulation.cos.generateSpectrumMovie();
+% simulation.cos.spectrumPlot(1300,[9,10]);   % 特定時刻スペクトラムプロット
+% simulation.cos.generateSpectrumMovie("0617_Na20.mp4");
 % simulation.cos.deadlockPlot([1,5:20]);
 % simulation.cos.variancePlot([1,5:20]);
 % simulation.kpAdjustPlot([1,5:20]);
