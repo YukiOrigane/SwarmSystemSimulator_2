@@ -135,25 +135,25 @@ classdef SwarmWithWaveInteractionSimulation < MobileRobots2dSimulator
             %%%% CBF %%%%
             % 詳細はCollisionAvoidanceCBF.mを参照
             x_io = obj.calcVectorToWalls(t);    % 壁との相対位置ベクトル
+            dXdt = repmat(obj.dxdt(:,1,t),1,obj.param.Na);
+            dYdt = repmat(obj.dxdt(:,2,t),1,obj.param.Na);
+            dXdt_ij = dXdt.'-dXdt;
+            dYdt_ij = dYdt.'-dYdt;
+            cbf_(obj.param.Na) = obj.cbf;
+            dxdt_ = obj.dxdt(:,:,t);
+            lambda_lower_t = obj.lambda_history_lower(:,:,t);   % lambda_lower_tを初期化し，要素数を確定
+            lambda_upper_t = obj.lambda_history_upper(:,:,t);
+            param_ = obj.param;
             for i = 1:obj.param.Na
-                % ロボット間衝突回避CBF %
-                obj.cbf = obj.cbf.setParameters(1,obj.param.cbf_rs,obj.param.dt,obj.param.cbf_gamma,true);
-                x_ij = obj.x(:,:,t) - obj.x(i,:,t);          % 相対位置ベクトル
-                dxdt_ij = obj.dxdt(:,:,t) - obj.dxdt(i,:,t); % 相対速度ベクトル
-                obj.cbf = obj.cbf.addConstraints([x_ij(Adj(:,i)==1,1), x_ij(Adj(:,i)==1,2)], [dxdt_ij(Adj(:,i)==1,1), dxdt_ij(Adj(:,i)==1,2)]);
-                % 隣接ロボットとの相対ベクトルのみCBF制約として利用
-                % 壁との衝突回避CBF %
-                obj.cbf = obj.cbf.setParameters(1,obj.param.cbf_rs,obj.param.dt,obj.param.cbf_gamma,false);
-                obj.cbf = obj.cbf.addConstraints(permute(x_io(i,:,:),[3,2,1]), -repmat(obj.dxdt(i,:,t),length(x_io(i,:,:)),1));
-                % 壁との相対位置ベクトルと，自身の速度ベクトル(壁との相対速度ベクトル)をCBFに入れる
-                % 入力範囲の制限 %
-                obj.cbf = obj.cbf.addInputMinMaxConstraint(obj.param.cbf_lb,obj.param.cbf_ub);
+            %parfor i = 1:obj.param.Na
                 % CBFの適用 %
-                [u_t(i,:),lambda_] = obj.cbf.apply(u_nominal(i,:));
-                obj.lambda_history_lower(i,:,t) = (lambda_.lower).';
-                obj.lambda_history_upper(i,:,t) = (lambda_.upper).';
-                obj.cbf = obj.cbf.clearConstraints();
+                [u_t(i,:),lambda_] = calcEachCBF(param_,[X_ij(i,:).', Y_ij(i,:).'], [dXdt_ij(i,:).', dYdt_ij(i,:).'], x_io(i,:,:), dxdt_(i,:), Adj(:,i), u_nominal(i,:),cbf_(i));
+                lambda_lower_t(i,:,1) = (lambda_.lower).';
+                lambda_upper_t(i,:,1) = (lambda_.upper).';
+                cbf_(i) = cbf_(i).clearConstraints();
             end
+            obj.lambda_history_lower(:,:,t) = lambda_lower_t;
+            obj.lambda_history_upper(:,:,t) = lambda_upper_t;
 
             %%%% 最終的な入力の生成 %%%%
             u_t = u_t .* (vecnorm(u_t,2,2)>obj.param.minimal_u);                 % 入力が小さすぎる場合は打ち切り
