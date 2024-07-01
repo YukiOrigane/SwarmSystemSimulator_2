@@ -117,11 +117,13 @@ classdef CollisionAvoidanceCBF
                 ub_ = obj.ub-u_nominal.';
             end
             [delta_u,~,flag,~,lambda] = quadprog(eye(dim), zeros(dim,1), obj.A, obj.b-obj.A*u_nominal.',[],[],lb_,ub_,[],obj.options);    % A\delta u\leq b-A\hat{u}
-            u = (u_nominal.' + delta_u).';
+            %u = (u_nominal.' + delta_u).';
             %{  %　デバッグ
             if flag ~= 1
                  disp("CBF missied "+string(flag))
                 u = 0*u_nominal;    % だめなら入力なしに
+                lambda.lower = zeros(2,1);
+                lambda.upper = zeros(2,1);
             else
                 u = (u_nominal.' + delta_u).';  % CBF解あり
             end

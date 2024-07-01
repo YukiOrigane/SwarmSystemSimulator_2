@@ -65,7 +65,7 @@ simulation = simulation.calcControlInput(10);
 simulation.cos.relativePositionEstimate(750,[8,9,10]);  % 推定デバッグ表示
 simulation.cos.peakAndFreqPlot([8,9,10]);   % エージェント毎ピーク履歴
 simulation.cos.peakAndFreqPlot2([1,5:20]);   % モード毎ピーク履歴
-% simulation.cos.spectrumPlot(200,[9,10]);   % 特定時刻スペクトラムプロット
+% simulation.cos.spectrumPlot(1445,[9,10]);   % 特定時刻スペクトラムプロット
 % simulation.cos.generateSpectrumMovie("0617_Na20.mp4");
 % simulation.cos.deadlockPlot([1,5:20]);
 % simulation.cos.variancePlot([1,5:20]);
