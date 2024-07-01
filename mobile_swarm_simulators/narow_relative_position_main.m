@@ -62,9 +62,9 @@ simulation.placePlot(1);
 simulation = simulation.generateMovieEstimate("0617_Na20_motion.mp4",8);
 simulation = simulation.setParam("is_debug_view",true);
 simulation = simulation.calcControlInput(10);
-simulation.cos.relativePositionEstimate(750,[8,9,10]);  % 推定デバッグ表示
-simulation.cos.peakAndFreqPlot([8,9,10]);   % エージェント毎ピーク履歴
-simulation.cos.peakAndFreqPlot2([1,5:20]);   % モード毎ピーク履歴
+% simulation.cos.relativePositionEstimate(750,[8,9,10]);  % 推定デバッグ表示
+% simulation.cos.peakAndFreqPlot([8,9,10]);   % エージェント毎ピーク履歴
+% simulation.cos.peakAndFreqPlot2([1,5:20]);   % モード毎ピーク履歴
 % simulation.cos.spectrumPlot(1445,[9,10]);   % 特定時刻スペクトラムプロット
 % simulation.cos.generateSpectrumMovie("0617_Na20.mp4");
 % simulation.cos.deadlockPlot([1,5:20]);
@@ -78,20 +78,20 @@ simulation.cos.peakAndFreqPlot2([1,5:20]);   % モード毎ピーク履歴
 % simulation.controlInputPlot();
 simulation.obtainNumberOfPassedRobots();
  
-figure
-subplot(2,2,1)
-simulation.edgeDeadlockPlot(1,2,false);
-subplot(2,2,2)
-simulation.edgeDeadlockPlot(240,2,false);
-subplot(2,2,3)
-simulation.edgeDeadlockPlot(480,2,false);
-subplot(2,2,4)
-simulation.edgeDeadlockPlot(720,2,false);
-figure
-subplot(1,2,1)
-simulation.trajectryJudgePlot([1601:2000]);
-subplot(1,2,2)
-simulation.trajectryJudgePlot([2001:3000]);
+% figure
+% subplot(2,2,1)
+% simulation.edgeDeadlockPlot(1,2,false);
+% subplot(2,2,2)
+% simulation.edgeDeadlockPlot(240,2,false);
+% subplot(2,2,3)
+% simulation.edgeDeadlockPlot(480,2,false);
+% subplot(2,2,4)
+% simulation.edgeDeadlockPlot(720,2,false);
+% figure
+% subplot(1,2,1)
+% simulation.trajectryJudgePlot([1601:2000]);
+% subplot(1,2,2)
+% simulation.trajectryJudgePlot([2001:3000]);
 
 %% シミュレーションの実施 : 回す
 addpath(genpath("../../../SwarmSystemSimulator_2/"))    % パスを通す

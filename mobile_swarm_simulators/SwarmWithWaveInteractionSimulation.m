@@ -156,7 +156,7 @@ classdef SwarmWithWaveInteractionSimulation < MobileRobots2dSimulator
             end
 
             %%%% 最終的な入力の生成 %%%%
-            u_t = u_t .* vecnorm(u_t,2,2)>obj.param.minimal_u;                 % 入力が小さすぎる場合は打ち切り
+            u_t = u_t .* (vecnorm(u_t,2,2)>obj.param.minimal_u);                 % 入力が小さすぎる場合は打ち切り
             obj.u(:,:,t) = u_t - obj.param.kd*obj.dxdt(:,:,t);  % CBF後に粘性が入っている…
 
             %%%% デバッグ %%%%
