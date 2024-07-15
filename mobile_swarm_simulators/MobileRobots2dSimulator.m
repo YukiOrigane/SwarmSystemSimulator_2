@@ -211,6 +211,17 @@ classdef MobileRobots2dSimulator < Simulator
             hold on
         end
 
+        function obj = numberPlacePlot(obj, t, view_edge)
+            % ロボットの位置とロボットナンバーを描画
+            arguments
+                obj
+                t               % 時刻
+                view_edge = false                    % エッジ表示するか？
+            end
+            obj.placePlot(t,view_edge);
+            text(obj.x(:,1,t)-0.1,obj.x(:,2,t)-0.1,string(1:obj.param.Na),'FontSize',12);
+        end
+
         function obj = showEdges(obj,t)
             G_ = obj.calcGraph(t);  % グラフ計算
             e_ = table2array(G_.Edges);          % エッジ取得

@@ -14,8 +14,9 @@ simulation.setFigureProperty("large");                  % 描画の基本設定�
 %% シミュレーションの実施 : 単発
 simulation = simulation.setParam("environment_file","setting_files/environments/narrow_space_w_2_5_vertical_short.m");   % パラメタ変更
 %simulation = simulation.setParam("environment_file","setting_files/environments/narrow_space_w_2_5_vertical.m");   % パラメタ変更
-simulation = simulation.setParam("placement_file","setting_files/init_conditions/narrow_20.m");   % パラメタ変更
-%simulation = simulation.setParam("placement_file","setting_files/init_conditions/read_mat_file.m");   % パラメタ変更
+%simulation = simulation.setParam("placement_file","setting_files/init_conditions/narrow_20.m");   % パラメタ変更
+%simulation = simulation.setParam("placement_file","setting_files/init_conditions/narrow_40.m");   % パラメタ変更
+simulation = simulation.setParam("placement_file","setting_files/init_conditions/read_mat_file.m");   % パラメタ変更
 % COS %
 simulation.cos = simulation.cos.setParam("kappa",80);
 simulation.cos = simulation.cos.setParam("do_estimate",true);
@@ -42,31 +43,33 @@ simulation = simulation.setParam("cbf_ub", []); % 入力上限 ex) [10; 10]
 % kp調整 %
 simulation = simulation.setParam("deadlock_source","cos");
 simulation = simulation.setParam("do_kp_adjust",true);  % kp調整を実施？
-simulation = simulation.setParam("kp_adjust_out",-0.1);
+%simulation = simulation.setParam("kp_adjust_out",-0.1);
+simulation = simulation.setParam("kp_adjust_out",1.2);  % デバッグ用．内外で行動切り替えをせずデッドロックを維持する
 %simulation = simulation.setParam("kp_adjust_in",-0.3);
 simulation = simulation.setParam("kp_adjust_in",1.2);
 simulation = simulation.setParam("adjust_stepwith",80);
 %simulation = simulation.setParam("dxdt_0",[[0 0];[0 0]]);   % パラメタ変更
 % 本番 %
 simulation = simulation.readSettingFiles(); % 設定ファイルの読み込み
-rng(0);     % 乱数の固定
+rng(5);     % 乱数の固定
 simulation = simulation.initializeVariables();  % 初期値の計算
 simulation = simulation.defineSystem();  % システム設定（誘導場の生成）
 simulation = simulation.simulate(); % シミュレーションの実施
 %% 描画とか
 figure
-simulation.edgeDeadlockPlot(290,2);
-simulation.placePlot(1);
+simulation.edgeDeadlockPlot(960,2);
+simulation.placePlot(650);
+%simulation.numberPlacePlot(510);
 % simulation.cos = simulation.cos.plot();
 % simulation = simulation.generateMovieEstimate();
-simulation = simulation.generateMovieEstimate("0617_Na20_motion.mp4",8);
+simulation = simulation.generateMovieEstimate("0701_Na40_motion.mp4",8);
 simulation = simulation.setParam("is_debug_view",true);
 simulation = simulation.calcControlInput(10);
 % simulation.cos.relativePositionEstimate(750,[8,9,10]);  % 推定デバッグ表示
-% simulation.cos.peakAndFreqPlot([8,9,10]);   % エージェント毎ピーク履歴
-% simulation.cos.peakAndFreqPlot2([1,5:20]);   % モード毎ピーク履歴
+% simulation.cos.peakAndFreqPlot([32,30,10]);   % エージェント毎ピーク履歴
+% simulation.cos.peakAndFreqPlot2(8:8:48);   % モード毎ピーク履歴
 % simulation.cos.spectrumPlot(1445,[9,10]);   % 特定時刻スペクトラムプロット
-% simulation.cos.generateSpectrumMovie("0617_Na20.mp4");
+% simulation.cos.generateSpectrumMovie("0701_Na40.mp4");
 % simulation.cos.deadlockPlot([1,5:20]);
 % simulation.cos.variancePlot([1,5:20]);
 % simulation.kpAdjustPlot([1,5:20]);
@@ -80,13 +83,19 @@ simulation.obtainNumberOfPassedRobots();
  
 % figure
 % subplot(2,2,1)
-% simulation.edgeDeadlockPlot(1,2,false);
-% subplot(2,2,2)
-% simulation.edgeDeadlockPlot(240,2,false);
-% subplot(2,2,3)
-% simulation.edgeDeadlockPlot(480,2,false);
-% subplot(2,2,4)
-% simulation.edgeDeadlockPlot(720,2,false);
+time_list = [1 240 480 720];
+for i = 1:length(time_list)
+    figure
+    t = time_list(i);
+    simulation.edgeDeadlockPlot(t,2,false);
+    xlabel("$x$ (m)",'Interpreter','latex')
+    ylabel("$y$ (m)",'Interpreter','latex')
+    colorbar('off')
+    ax = gca;
+    ax.FontSize = 18;
+    saveas(gcf,"rsj2024_t_"+string(t)+"_nonedge.png")
+end
+
 % figure
 % subplot(1,2,1)
 % simulation.trajectryJudgePlot([1601:2000]);

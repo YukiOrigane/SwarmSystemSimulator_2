@@ -301,7 +301,7 @@ classdef WaveInteractionSimulator < Simulator
                 obj
                 t       % 時刻
                 view_eigen = true; % 固有値に基づく真値をプロットするか？
-                num = [9,10]    % エージェント番号
+                num = [24,32,40]    % エージェント番号
             end
             if t<obj.param.minimum_store    % 蓄積データ少ない間は推定しない
                 return
@@ -317,7 +317,7 @@ classdef WaveInteractionSimulator < Simulator
             plot(f,10*log10(p));
             hold on
             if view_eigen   % 固有値に基づく真値の描画
-                xline(sqrt(abs(obj.param.kappa*permute(obj.sigma(2:3,1,t),[3,1,2])))/2/pi,'--k',"$f_"+string((2:3)-1)+"$",'Interpreter','latex','LineWidth',0.5,'FontSize',14)
+                xline(sqrt(abs(obj.param.kappa*permute(obj.sigma(2:5,1,t),[3,1,2])))/2/pi,'--k',"$f_"+string((2:5)-1)+"$",'Interpreter','latex','LineWidth',0.5,'FontSize',14)
             end
             for mu = 1:obj.param.peak_memory_num
                 plot(obj.peak_freqs(num,mu,t),10*log10(obj.peaks(num,mu,t)),'o');
@@ -373,7 +373,7 @@ classdef WaveInteractionSimulator < Simulator
                 l = legend(string(num));
                 l.NumColumns = 4;
                 ylim([-100,100])
-                xlim([0,1000])
+                xlim([0,1500])
                 ylabel("Power of Peaks [dB]")
                 xlabel("TIme Step")
                 title("mode "+string(mu))
@@ -385,7 +385,7 @@ classdef WaveInteractionSimulator < Simulator
                 l = legend(string(num));
                 l.NumColumns = 4;
                 %ylim([-100,100])
-                xlim([0,1000])
+                xlim([0,1500])
                 ylabel("Frequency of Peaks [Hz]")
                 xlabel("TIme Step")
                 title("mode "+string(mu))
