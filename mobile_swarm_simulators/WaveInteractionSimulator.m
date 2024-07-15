@@ -14,7 +14,11 @@ classdef WaveInteractionSimulator < Simulator
         phi_x     % 位相の方向微分 [台数,空間次元,時刻]
         is_edge  % 自身が端っこか？ [台数,空間次元,時刻]
         peaks       % ピークの大きさ [台数,モード数,時刻]
+        peaks_x       % ピークの大きさ [台数,モード数,時刻]
+        peaks_y       % ピークの大きさ [台数,モード数,時刻]
         peak_freqs  % ピークの位置 [台数,モード数,時刻]
+        peak_x_freqs  % ピークの位置 [台数,モード数,時刻]
+        peak_y_freqs  % ピークの位置 [台数,モード数,時刻]
         is_deadlock % 自身がデッドロック状態か判定 [台数,1,時刻]
         peak_variances_db  % ピークの分散 [台数,モード数,時刻]
         freq_variances  % ピーク周波数の分散 [台数,モード数,時刻]
@@ -72,8 +76,12 @@ classdef WaveInteractionSimulator < Simulator
             obj.x(:,:,:) = zeros(obj.param.Na, 2, obj.param.Nt);    % 状態変数の定義
             obj.is_edge(:,:,:) = zeros(obj.param.Na, 2, obj.param.Nt);  % 内外変数
             obj.is_deadlock(:,:,:) = zeros(obj.param.Na, 1, obj.param.Nt);  % デッドロック判定
-            obj.peaks(:,:,:) = zeros(obj.param.Na, obj.param.peak_memory_num, obj.param.Nt);    % ピークの大きさ
-            obj.peak_freqs(:,:,:) = zeros(obj.param.Na, obj.param.peak_memory_num, obj.param.Nt);    % ピークの大きさ
+            obj.peaks(:,:,:) = zeros(obj.param.Na, obj.param.peak_memory_num, obj.param.Nt);    % ピークの大きさ 
+            obj.peaks_x(:,:,:) = zeros(obj.param.Na, obj.param.peak_memory_num, obj.param.Nt);    % x微分
+            obj.peaks_y(:,:,:) = zeros(obj.param.Na, obj.param.peak_memory_num, obj.param.Nt);    % y微分
+            obj.peak_freqs(:,:,:) = zeros(obj.param.Na, obj.param.peak_memory_num, obj.param.Nt);    %
+            obj.peak_x_freqs(:,:,:) = zeros(obj.param.Na, obj.param.peak_memory_num, obj.param.Nt);    % 
+            obj.peak_y_freqs(:,:,:) = zeros(obj.param.Na, obj.param.peak_memory_num, obj.param.Nt);    % 
             obj.peak_variances_db(:,:,:) = zeros(obj.param.Na, obj.param.peak_memory_num, obj.param.Nt);    % ピークの分散
             obj.freq_variances(:,:,:) = zeros(obj.param.Na, obj.param.peak_memory_num, obj.param.Nt);    % ピーク位置の分散
         end
@@ -192,44 +200,40 @@ classdef WaveInteractionSimulator < Simulator
             [px_,fx_] = pspectrum(permute(obj.phi_x(:,1,t_start_:t),[3,1,2]), obj.t_vec(t_start_:t));
             [py_,fy_] = pspectrum(permute(obj.phi_x(:,2,t_start_:t),[3,1,2]), obj.t_vec(t_start_:t));
             for i = 1:obj.param.Na  % エージェント毎回し
-                [peak,peak_index] = findpeaks(p_(:,i),"MinPeakHeight",obj.param.power_threshold);    % ピーク検出
-                [~,peakx_index] = findpeaks(px_(:,i),"MinPeakHeight",obj.param.power_threshold);    % ピーク検出
-                [~,peaky_index] = findpeaks(py_(:,i),"MinPeakHeight",obj.param.power_threshold);    % ピーク検出
-                if length(peak)<obj.param.peak_memory_num
-                    n_ = length(peak);
-                else
-                    n_ = obj.param.peak_memory_num;
-                end
+                [peak,peak_index,n_] = obj.findFillPeaks(p_(:,i),obj.param);
+                [peak_x,peak_x_index,nx_] = obj.findFillPeaks(px_(:,i),obj.param);
+                [peak_y,peak_y_index,ny_] = obj.findFillPeaks(py_(:,i),obj.param);
                 obj.peaks(i,1:n_,t) = peak(1:n_);
+                obj.peaks_x(i,1:nx_,t) = peak_x(1:nx_);
+                obj.peaks_y(i,1:ny_,t) = peak_y(1:ny_);
                 obj.peak_freqs(i,1:n_,t) = f_(peak_index(1:n_));
-                if isempty(peakx_index)  % ピークがemptyの場合は最低周波数でピーク0に
-                    pksx_ = 0;
-                    peakx_index = 1;
+                obj.peak_x_freqs(i,1:nx_,t) = fx_(peak_x_index(1:nx_));
+                obj.peak_y_freqs(i,1:ny_,t) = fy_(peak_y_index(1:ny_));
+
+                if isempty(peak_x_index)  % ピークがemptyの場合は最低周波数でピーク0に
+                    peak_x_index = 1;
                 end
-                if isempty(peaky_index)
-                    pksy_ = 0;
-                    peaky_index = 1;
+                if isempty(peak_y_index)
+                    peak_y_index = 1;
                 end
                 pxi_ = px_(:,i);    % 論理取り出しをするためにベクトルに
                 pyi_ = py_(:,i);
                 %fxi_ = fx_(:,i);
                 %fyi_ = fy_(:,i);
-                index_xwin = pxi_(peakx_index)>pyi_(peakx_index);   % xのピークの内，yの値より高かったもの
-                index_ywin = pyi_(peaky_index)>pxi_(peaky_index);
+                index_xwin = pxi_(peak_x_index)>pyi_(peak_x_index);   % xのピークの内，yの値より高かったもの
+                index_ywin = pyi_(peak_y_index)>pxi_(peak_y_index);
                 if(sum(index_xwin)==0) % x側のピークが勝てる位置がなかった
-                    maxindexx_ = peakx_index(1);
+                    maxindexx_ = peak_x_index(1);
                 else
-                    win_indexx_ = peakx_index(index_xwin);
+                    win_indexx_ = peak_x_index(index_xwin);
                     maxindexx_ = win_indexx_(1);
                 end
                 if(sum(index_ywin)==0) % y側のピークが勝てる位置がなかった
-                    maxindexy_ = peaky_index(1);
+                    maxindexy_ = peak_y_index(1);
                 else
-                    win_indexy_ = peaky_index(index_ywin);
+                    win_indexy_ = peak_y_index(index_ywin);
                     maxindexy_ = win_indexy_(1);
                 end
-                %[~, maxindexx_] = max(pksx_);    % 偏微分側の最大ピークインデックスを得る
-                %[~, maxindexy_] = max(pksy_);    % 注意) 2次モードや3次モードが最大になってしまう場合，修正の必要がある
                 obj.is_edge(i,1,t) = 0;
                 obj.is_edge(i,2,t) = 0;
                 if (obj.param.is_judge_continuous)  % 判定結果は連続？論理値？
@@ -239,8 +243,8 @@ classdef WaveInteractionSimulator < Simulator
                     obj.is_edge(i,1,t) = p_(maxindexx_,i)>px_(maxindexx_,i);
                     obj.is_edge(i,2,t) = p_(maxindexy_,i)>py_(maxindexy_,i);
                 end
-                %obj.is_edge(i,1,t) = p_(peakx_index(maxindexx_),i)>px_(peakx_index(maxindexx_),i)*sqrt(obj.param.kappa)/(2*pi*fx_(peakx_index(maxindexx_)));   % 最大
-                %obj.is_edge(i,2,t) = p_(peakx_index(maxindexy_),i)>py_(peakx_index(maxindexy_),i)*sqrt(obj.param.kappa)/(2*pi*fy_(peaky_index(maxindexy_)));
+                %obj.is_edge(i,1,t) = p_(peak_x_index(maxindexx_),i)>px_(peak_x_index(maxindexx_),i)*sqrt(obj.param.kappa)/(2*pi*fx_(peak_x_index(maxindexx_)));   % 最大
+                %obj.is_edge(i,2,t) = p_(peak_x_index(maxindexy_),i)>py_(peak_x_index(maxindexy_),i)*sqrt(obj.param.kappa)/(2*pi*fy_(peak_y_index(maxindexy_)));
                 % 補正項の詳細
                 % ピーク周波数f[Hz]としてエージェント長l. \mu次モードについて l = \mu\sqrt{\kappa}/{2f}
                 % 微分時に\pi/l倍されているはずなので，l/\pi = \um\sqrt{\kappa}/{2\pi
@@ -262,6 +266,21 @@ classdef WaveInteractionSimulator < Simulator
                 end
             end
             obj = obj.judgeDeadlock(t); % デッドロック判定
+        end
+
+        function [peaks_,indeces_,n_] = findFillPeaks(~,p_,param_)
+            % FFT結果に対してピーク検出を行う．十分な数のピークがなかったら0で埋める
+            arguments
+                ~
+                p_  % FFT結果（パワー）
+                param_
+            end
+            [peaks_,indeces_] = findpeaks(p_(:),"MinPeakHeight",param_.power_threshold);    % ピーク検出
+            if length(peaks_)<param_.peak_memory_num
+                n_ = length(peaks_);
+            else
+                n_ = param_.peak_memory_num;
+            end
         end
 
         function obj = judgeDeadlock(obj,t)
@@ -329,6 +348,46 @@ classdef WaveInteractionSimulator < Simulator
             legend(string(num))
         end
 
+        function spectrumPlotDiff(obj,t,view_eigen,num)
+            % 指定エージェントのスペクトラムを，空間微分含めて描画
+            arguments
+                obj
+                t       % 時刻
+                view_eigen = true; % 固有値に基づく真値をプロットするか？
+                num {mustBeNumeric} = 32;    % エージェント番号
+            end
+            if t<obj.param.minimum_store    % 蓄積データ少ない間は推定しない
+                return
+            end
+            if t>obj.param.time_histry
+                % 時刻が推定に使うデータ点数より多いかどうかで，使う時刻幅を変える
+                t_start_ = t-obj.param.time_histry;
+            else
+                t_start_ = 1;
+            end
+            % 各位相情報に関するパワースペクトラム p_は [周波数,チャンネル]となっているので注意
+            [p,f] = pspectrum(permute(obj.phi(num,1,t_start_:t),[3,1,2]), obj.t_vec(t_start_:t));
+            [px,fx] = pspectrum(permute(obj.phi_x(num,1,t_start_:t),[3,1,2]), obj.t_vec(t_start_:t));
+            [py,fy] = pspectrum(permute(obj.phi_x(num,2,t_start_:t),[3,1,2]), obj.t_vec(t_start_:t));
+            plot(f,10*log10(p));
+            hold on
+            plot(fx,10*log10(px));
+            plot(fy,10*log10(py));
+            if view_eigen   % 固有値に基づく真値の描画
+                xline(sqrt(abs(obj.param.kappa*permute(obj.sigma(2:5,1,t),[3,1,2])))/2/pi,'--k',"$f_"+string((2:5)-1)+"$",'Interpreter','latex','LineWidth',0.5,'FontSize',14)
+            end
+            for mu = 1:obj.param.peak_memory_num
+                plot(obj.peak_freqs(num,mu,t),10*log10(obj.peaks(num,mu,t)),'o');
+                plot(obj.peak_x_freqs(num,mu,t),10*log10(obj.peaks_x(num,mu,t)),'o');
+                plot(obj.peak_y_freqs(num,mu,t),10*log10(obj.peaks_y(num,mu,t)),'o');
+            end
+            hold off
+            text(max(f)*0.7, 0, "t = "+string(t), 'FontSize',12);
+            ylim([-100,20])
+            xlim([0,10])
+            legend(["\phi","\partial_x\phi","\partial_y\phi"])
+        end
+
         function peakAndFreqPlot(obj,num)
             % 特定エージェントのピーク及びピーク周波数の時刻履歴を，【エージェント毎に】プロット
             arguments
@@ -360,16 +419,28 @@ classdef WaveInteractionSimulator < Simulator
             end
         end
 
-        function peakAndFreqPlot2(obj,num)
+        function peakAndFreqPlot2(obj,num,diff_)
             % 特定エージェントのピーク及びピーク周波数の時刻履歴を，【ピーク毎に】プロット
             arguments
                 obj
                 num = 8 % 表示対象のエージェント
+                diff_ {mustBeMember(diff_,["","x","y"])} = ""
             end
             
+            if diff_ == "x"
+                p_ = obj.peaks_x;
+                f_ = obj.peak_x_freqs;
+            elseif diff_ == "y"
+                p_ = obj.peaks_y;
+                f_ = obj.peak_y_freqs;
+            else
+                p_ = obj.peaks;
+                f_ = obj.peak_freqs;
+            end
+
             for mu = 1:obj.param.peak_memory_num
                 figure
-                plot(1:obj.param.Nt, permute(10*log10(obj.peaks(num,mu,:)),[3,1,2]))
+                plot(1:obj.param.Nt, permute(10*log10(p_(num,mu,:)),[3,1,2]))
                 l = legend(string(num));
                 l.NumColumns = 4;
                 ylim([-100,100])
@@ -381,7 +452,7 @@ classdef WaveInteractionSimulator < Simulator
             
             for mu = 1:obj.param.peak_memory_num
                 figure
-                plot(1:obj.param.Nt, permute(obj.peak_freqs(num,mu,:),[3,1,2]))
+                plot(1:obj.param.Nt, permute(f_(num,mu,:),[3,1,2]))
                 l = legend(string(num));
                 l.NumColumns = 4;
                 %ylim([-100,100])

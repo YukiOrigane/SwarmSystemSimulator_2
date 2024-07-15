@@ -68,7 +68,11 @@ simulation = simulation.calcControlInput(10);
 % simulation.cos.relativePositionEstimate(750,[8,9,10]);  % 推定デバッグ表示
 % simulation.cos.peakAndFreqPlot([32,30,10]);   % エージェント毎ピーク履歴
 % simulation.cos.peakAndFreqPlot2(8:8:48);   % モード毎ピーク履歴
-% simulation.cos.spectrumPlot(1445,[9,10]);   % 特定時刻スペクトラムプロット
+% simulation.cos.peakAndFreqPlot2(8:8:48,"x");   % モード毎ピーク履歴
+% simulation.cos.peakAndFreqPlot2(8:8:48,"y");   % モード毎ピーク履歴
+% simulation.cos.spectrumPlot(1445,true,[9,10]);   % 特定時刻スペクトラムプロット
+% simulation.cos.spectrumPlotDiff(1445,true,32);   % 特定時刻スペクトラムプロット
+% simulation.cos.spectrumPlotDiff(1445,true,48);   % 特定時刻スペクトラムプロット
 % simulation.cos.generateSpectrumMovie("0701_Na40.mp4");
 % simulation.cos.deadlockPlot([1,5:20]);
 % simulation.cos.variancePlot([1,5:20]);
