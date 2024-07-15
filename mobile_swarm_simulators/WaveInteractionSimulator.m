@@ -20,6 +20,8 @@ classdef WaveInteractionSimulator < Simulator
         peak_x_freqs  % ピークの位置 [台数,モード数,時刻]
         peak_y_freqs  % ピークの位置 [台数,モード数,時刻]
         is_deadlock % 自身がデッドロック状態か判定 [台数,1,時刻]
+        is_deadlock_variance % 分散による判定 [台数,3(phi,phi_x,phi_y),時刻]
+        is_deadlock_periodic % 周期性による判定 [台数,3(phi,phi_x,phi_y),時刻]
         peak_variances_db  % ピークの分散 [台数,モード数,時刻]
         freq_variances  % ピーク周波数の分散 [台数,モード数,時刻]
     end
@@ -55,6 +57,9 @@ classdef WaveInteractionSimulator < Simulator
             obj.param.power_variance_db = 10^-3; % デッドロック判定時のパワー分散閾値
             obj.param.freq_variance_hz = 10^-5;  % デッドロック判定時の周波数分散閾値
             obj.param.deadlock_stepwith = 100;  % デッドロック判定．何ステップ分の定常状態を要請するか？
+            obj.param.deadlock_stepwith_periodic = 512;  % デッドロック判定．周期性検出窓
+            obj.param.periodic_coeff_threshold = 0.5;   % 周期性検出時の自己相関閾値
+            obj.param.periodic_minimum_shift = 10;      % 周期性検出時に，これ以下のシフトは除外する
             %%%%%%%% 読み込みファイル名 %%%%%%%%
             %obj.param.environment_file = "setting_files/environments/narrow_space.m";  % 環境ファイル
             %obj.param.placement_file = "setting_files/init_conditions/narrow_20.m";    % 初期位置ファイル
@@ -76,6 +81,8 @@ classdef WaveInteractionSimulator < Simulator
             obj.x(:,:,:) = zeros(obj.param.Na, 2, obj.param.Nt);    % 状態変数の定義
             obj.is_edge(:,:,:) = zeros(obj.param.Na, 2, obj.param.Nt);  % 内外変数
             obj.is_deadlock(:,:,:) = zeros(obj.param.Na, 1, obj.param.Nt);  % デッドロック判定
+            obj.is_deadlock_variance(:,:,:) = zeros(obj.param.Na, 3, obj.param.Nt);
+            obj.is_deadlock_periodic(:,:,:) = zeros(obj.param.Na, 3, obj.param.Nt);
             obj.peaks(:,:,:) = zeros(obj.param.Na, obj.param.peak_memory_num, obj.param.Nt);    % ピークの大きさ 
             obj.peaks_x(:,:,:) = zeros(obj.param.Na, obj.param.peak_memory_num, obj.param.Nt);    % x微分
             obj.peaks_y(:,:,:) = zeros(obj.param.Na, obj.param.peak_memory_num, obj.param.Nt);    % y微分
@@ -265,7 +272,8 @@ classdef WaveInteractionSimulator < Simulator
                     title("i = "+string(i)+", l_x = "+string(sqrt(obj.param.kappa)/2/fx_(maxindexx_))+", l_y = " + string(sqrt(obj.param.kappa)/2/fy_(maxindexy_)));
                 end
             end
-            obj = obj.judgeDeadlock(t); % デッドロック判定
+            %obj = obj.judgeDeadlock(t); % デッドロック判定
+            obj = obj.judgeDeadlockWithPeriodic(t); % デッドロック判定
         end
 
         function [peaks_,indeces_,n_] = findFillPeaks(~,p_,param_)
@@ -293,14 +301,43 @@ classdef WaveInteractionSimulator < Simulator
             %if t>700
             %    disp("debug")
             %end
-            peak_variances_ = zeros(obj.param.Na,obj.param.peak_memory_num);    % ピークの大きさの分散
-            freq_variances_ = zeros(obj.param.Na,obj.param.peak_memory_num);    % ピークの位置の分散
             peak_variances_ = var(10*log10(obj.peaks(:,:,t-obj.param.deadlock_stepwith+1:t)),0,3);   % 時刻に沿った分散を計算．N-1で正規化
             freq_variances_ = var(obj.peak_freqs(:,:,t-obj.param.deadlock_stepwith+1:t),0,3);
             obj.is_deadlock(:,:,t) = prod(peak_variances_<obj.param.power_variance_db,2).*prod(freq_variances_<obj.param.freq_variance_hz,2);
             obj.peak_variances_db(:,:,t) = peak_variances_;
             obj.freq_variances(:,:,t) = freq_variances_;
             % 各モードの大きさ，周波数について全ての分散が閾値を下回っていたら，デッドロックと判定
+        end
+
+        function obj = judgeDeadlockWithPeriodic(obj,t)
+            % 周期性を加味したデッドロック判定
+            % @brief is_deadlock変数に1か0を返す
+            % @brief 時刻tにおけるpeakの計算後に呼び出すこと
+            if t > obj.param.minimum_store+obj.param.deadlock_stepwith
+                freq_variances_ = var(obj.peak_freqs(:,:,t-obj.param.deadlock_stepwith+1:t),0,3);   % 時刻に沿った分散を計算．N-1で正規化
+                freq_x_variances_ = var(obj.peak_x_freqs(:,:,t-obj.param.deadlock_stepwith+1:t),0,3);
+                freq_y_variances_ = var(obj.peak_y_freqs(:,:,t-obj.param.deadlock_stepwith+1:t),0,3);
+                obj.is_deadlock_variance(:,1,t) = prod(freq_variances_<obj.param.freq_variance_hz,2);
+                obj.is_deadlock_variance(:,2,t) = prod(freq_x_variances_<obj.param.freq_variance_hz,2);
+                obj.is_deadlock_variance(:,3,t) = prod(freq_y_variances_<obj.param.freq_variance_hz,2);
+            end
+            if t > obj.param.minimum_store+obj.param.deadlock_stepwith_periodic
+                for i = 1:obj.param.Na
+                    f_ = permute(obj.peak_freqs(i,1,t-obj.param.deadlock_stepwith_periodic+1:t),[3,1,2]);
+                    fx_ = permute(obj.peak_x_freqs(i,1,t-obj.param.deadlock_stepwith_periodic+1:t),[3,1,2]);
+                    fy_ = permute(obj.peak_y_freqs(i,1,t-obj.param.deadlock_stepwith_periodic+1:t),[3,1,2]);
+                    [c_,lags_] = xcorr(f_-mean(f_),'normalized');    % １次ピークに限定することに注意
+                    [cx_,lags_x_] = xcorr(fx_-mean(fx_),'normalized');
+                    [cy_,lags_y_] = xcorr(fy_-mean(fy_),'normalized');
+                    [corr_peak_,corr_loc_] = findpeaks(c_,lags_,'MinPeakProminence',obj.param.periodic_coeff_threshold/2);
+                    [corr_peak_x_,corr_loc_x_] = findpeaks(cx_,lags_x_,'MinPeakProminence',obj.param.periodic_coeff_threshold/2);
+                    [corr_peak_y_,corr_loc_y_] = findpeaks(cy_,lags_y_,'MinPeakProminence',obj.param.periodic_coeff_threshold/2);
+                    obj.is_deadlock_periodic(i,1,t) = max([corr_peak_(corr_loc_>obj.param.periodic_minimum_shift);0]) > obj.param.periodic_coeff_threshold;     % ピークがない場合の[]>0 = [] を避けるために，[[],0]>0 = 0 とした
+                    obj.is_deadlock_periodic(i,2,t) = max([corr_peak_x_(corr_loc_x_>obj.param.periodic_minimum_shift);0]) > obj.param.periodic_coeff_threshold;
+                    obj.is_deadlock_periodic(i,3,t) = max([corr_peak_y_(corr_loc_y_>obj.param.periodic_minimum_shift);0]) > obj.param.periodic_coeff_threshold;
+                end
+            end
+            obj.is_deadlock(:,:,t) = prod(obj.is_deadlock_variance(:,:,t),2) + sum(obj.is_deadlock_periodic(:,:,t),2);
         end
 
         %%%%%%%%%%%%%%%%%%%%% 描画まわり %%%%%%%%%%%%%%%%%%

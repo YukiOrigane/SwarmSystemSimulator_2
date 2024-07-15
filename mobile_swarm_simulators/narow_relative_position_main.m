@@ -27,7 +27,7 @@ simulation.cos = simulation.cos.setParam("power_threshold",10^-7);
 simulation = simulation.setParam("stop_timehistry",256);
 simulation = simulation.setParam("stop_threshold",10^-3);
 % Swarm %
-simulation = simulation.setParam("kp",8);   % Swarm : 勾配追従力ゲイン
+simulation = simulation.setParam("kp",8);   % Swarm : 勾配追従力ゲインisou
 simulation = simulation.setParam("kf",0);  % Swarm : 群形成力ゲイン
 simulation = simulation.setParam("kd",10);   % Swarm : 粘性ゲイン
 simulation = simulation.setParam("Nt",1500);
@@ -62,11 +62,11 @@ simulation.placePlot(650);
 %simulation.numberPlacePlot(510);
 % simulation.cos = simulation.cos.plot();
 % simulation = simulation.generateMovieEstimate();
-simulation = simulation.generateMovieEstimate("0701_Na40_motion.mp4",8);
+simulation = simulation.generateMovieEstimate("0715_Na40_motion.mp4",8);
 simulation = simulation.setParam("is_debug_view",true);
 simulation = simulation.calcControlInput(10);
 % simulation.cos.relativePositionEstimate(750,[8,9,10]);  % 推定デバッグ表示
-% simulation.cos.peakAndFreqPlot([32,30,10]);   % エージェント毎ピーク履歴
+% simulation.cos.peakAndFreqPlot([9,10]);   % エージェント毎ピーク履歴
 % simulation.cos.peakAndFreqPlot2(8:8:48);   % モード毎ピーク履歴
 % simulation.cos.peakAndFreqPlot2(8:8:48,"x");   % モード毎ピーク履歴
 % simulation.cos.peakAndFreqPlot2(8:8:48,"y");   % モード毎ピーク履歴
@@ -84,6 +84,20 @@ simulation = simulation.calcControlInput(10);
 % simulation.lambdaPlot();
 % simulation.controlInputPlot();
 simulation.obtainNumberOfPassedRobots();
+
+subplot(6,1,1)
+imagesc(permute(simulation.cos.is_deadlock_variance(:,1,:),[1,3,2]))
+subplot(6,1,2)
+imagesc(permute(simulation.cos.is_deadlock_variance(:,2,:),[1,3,2]))
+subplot(6,1,3)
+imagesc(permute(simulation.cos.is_deadlock_variance(:,3,:),[1,3,2]))
+subplot(6,1,4)
+imagesc(permute(simulation.cos.is_deadlock_periodic(:,1,:),[1,3,2]))
+subplot(6,1,5)
+imagesc(permute(simulation.cos.is_deadlock_periodic(:,2,:),[1,3,2]))
+subplot(6,1,6)
+imagesc(permute(simulation.cos.is_deadlock_periodic(:,3,:),[1,3,2]))
+
  
 % figure
 % subplot(2,2,1)
