@@ -6,6 +6,7 @@ classdef WaveInteractionSimulator < Simulator
         % システムの変数を記載
         t_vec     % 固有時刻ベクトル
         phi       % 位相 [台数,1,時刻]
+        sigma     % 固有値 [台数,1,時刻]
         %dphidt   % ロボット速さ [台数,1,時刻]
         %u         % 入力
         G         % グラフオブジェクト．MATLABのgraph参照
@@ -13,8 +14,14 @@ classdef WaveInteractionSimulator < Simulator
         phi_x     % 位相の方向微分 [台数,空間次元,時刻]
         is_edge  % 自身が端っこか？ [台数,空間次元,時刻]
         peaks       % ピークの大きさ [台数,モード数,時刻]
+        peaks_x       % ピークの大きさ [台数,モード数,時刻]
+        peaks_y       % ピークの大きさ [台数,モード数,時刻]
         peak_freqs  % ピークの位置 [台数,モード数,時刻]
+        peak_x_freqs  % ピークの位置 [台数,モード数,時刻]
+        peak_y_freqs  % ピークの位置 [台数,モード数,時刻]
         is_deadlock % 自身がデッドロック状態か判定 [台数,1,時刻]
+        is_deadlock_variance % 分散による判定 [台数,3(phi,phi_x,phi_y),時刻]
+        is_deadlock_periodic % 周期性による判定 [台数,3(phi,phi_x,phi_y),時刻]
         peak_variances_db  % ピークの分散 [台数,モード数,時刻]
         freq_variances  % ピーク周波数の分散 [台数,モード数,時刻]
     end
@@ -50,6 +57,9 @@ classdef WaveInteractionSimulator < Simulator
             obj.param.power_variance_db = 10^-3; % デッドロック判定時のパワー分散閾値
             obj.param.freq_variance_hz = 10^-5;  % デッドロック判定時の周波数分散閾値
             obj.param.deadlock_stepwith = 100;  % デッドロック判定．何ステップ分の定常状態を要請するか？
+            obj.param.deadlock_stepwith_periodic = 512;  % デッドロック判定．周期性検出窓
+            obj.param.periodic_coeff_threshold = 0.5;   % 周期性検出時の自己相関閾値
+            obj.param.periodic_minimum_shift = 10;      % 周期性検出時に，これ以下のシフトは除外する
             %%%%%%%% 読み込みファイル名 %%%%%%%%
             %obj.param.environment_file = "setting_files/environments/narrow_space.m";  % 環境ファイル
             %obj.param.placement_file = "setting_files/init_conditions/narrow_20.m";    % 初期位置ファイル
@@ -65,13 +75,20 @@ classdef WaveInteractionSimulator < Simulator
             % 状態変数の定義と初期値の代入を行うこと
             obj.t_vec = 0:obj.param.dt:obj.param.dt*(obj.param.Nt-1); % 時刻ベクトルの定義
             obj.phi(:,:,:) = zeros(obj.param.Na, 1, obj.param.Nt);    % 状態変数の定義
+            obj.sigma(:,:,:) = zeros(obj.param.Na, 1, obj.param.Nt);    % 状態変数の定義
             obj.phi_x(:,:,:) = zeros(obj.param.Na, 2, obj.param.Nt);    % 状態変数の定義
             obj.phi(:,:,1) = obj.param.phi_0;   % 初期値の代入
             obj.x(:,:,:) = zeros(obj.param.Na, 2, obj.param.Nt);    % 状態変数の定義
             obj.is_edge(:,:,:) = zeros(obj.param.Na, 2, obj.param.Nt);  % 内外変数
             obj.is_deadlock(:,:,:) = zeros(obj.param.Na, 1, obj.param.Nt);  % デッドロック判定
-            obj.peaks(:,:,:) = zeros(obj.param.Na, obj.param.peak_memory_num, obj.param.Nt);    % ピークの大きさ
-            obj.peak_freqs(:,:,:) = zeros(obj.param.Na, obj.param.peak_memory_num, obj.param.Nt);    % ピークの大きさ
+            obj.is_deadlock_variance(:,:,:) = zeros(obj.param.Na, 3, obj.param.Nt);
+            obj.is_deadlock_periodic(:,:,:) = zeros(obj.param.Na, 3, obj.param.Nt);
+            obj.peaks(:,:,:) = zeros(obj.param.Na, obj.param.peak_memory_num, obj.param.Nt);    % ピークの大きさ 
+            obj.peaks_x(:,:,:) = zeros(obj.param.Na, obj.param.peak_memory_num, obj.param.Nt);    % x微分
+            obj.peaks_y(:,:,:) = zeros(obj.param.Na, obj.param.peak_memory_num, obj.param.Nt);    % y微分
+            obj.peak_freqs(:,:,:) = zeros(obj.param.Na, obj.param.peak_memory_num, obj.param.Nt);    %
+            obj.peak_x_freqs(:,:,:) = zeros(obj.param.Na, obj.param.peak_memory_num, obj.param.Nt);    % 
+            obj.peak_y_freqs(:,:,:) = zeros(obj.param.Na, obj.param.peak_memory_num, obj.param.Nt);    % 
             obj.peak_variances_db(:,:,:) = zeros(obj.param.Na, obj.param.peak_memory_num, obj.param.Nt);    % ピークの分散
             obj.freq_variances(:,:,:) = zeros(obj.param.Na, obj.param.peak_memory_num, obj.param.Nt);    % ピーク位置の分散
         end
@@ -120,6 +137,8 @@ classdef WaveInteractionSimulator < Simulator
                 obj.phi(:,:,t+1) = obj.phi(:,:,t) + obj.param.dt*(obj.param.omega_0 ...
                     -obj.param.kappa*full(laplacian(obj.G))*obj.phi(:,:,t));
             end
+            [~,D_] = eig(full(laplacian(obj.G)));
+            obj.sigma(:,1,t) = diag(D_);
         end
         
         function obj = calcPartialDerivative(obj,t)
@@ -188,44 +207,40 @@ classdef WaveInteractionSimulator < Simulator
             [px_,fx_] = pspectrum(permute(obj.phi_x(:,1,t_start_:t),[3,1,2]), obj.t_vec(t_start_:t));
             [py_,fy_] = pspectrum(permute(obj.phi_x(:,2,t_start_:t),[3,1,2]), obj.t_vec(t_start_:t));
             for i = 1:obj.param.Na  % エージェント毎回し
-                [peak,peak_index] = findpeaks(p_(:,i),"MinPeakHeight",obj.param.power_threshold);    % ピーク検出
-                [~,peakx_index] = findpeaks(px_(:,i),"MinPeakHeight",obj.param.power_threshold);    % ピーク検出
-                [~,peaky_index] = findpeaks(py_(:,i),"MinPeakHeight",obj.param.power_threshold);    % ピーク検出
-                if length(peak)<obj.param.peak_memory_num
-                    n_ = length(peak);
-                else
-                    n_ = obj.param.peak_memory_num;
-                end
+                [peak,peak_index,n_] = obj.findFillPeaks(p_(:,i),obj.param);
+                [peak_x,peak_x_index,nx_] = obj.findFillPeaks(px_(:,i),obj.param);
+                [peak_y,peak_y_index,ny_] = obj.findFillPeaks(py_(:,i),obj.param);
                 obj.peaks(i,1:n_,t) = peak(1:n_);
+                obj.peaks_x(i,1:nx_,t) = peak_x(1:nx_);
+                obj.peaks_y(i,1:ny_,t) = peak_y(1:ny_);
                 obj.peak_freqs(i,1:n_,t) = f_(peak_index(1:n_));
-                if isempty(peakx_index)  % ピークがemptyの場合は最低周波数でピーク0に
-                    pksx_ = 0;
-                    peakx_index = 1;
+                obj.peak_x_freqs(i,1:nx_,t) = fx_(peak_x_index(1:nx_));
+                obj.peak_y_freqs(i,1:ny_,t) = fy_(peak_y_index(1:ny_));
+
+                if isempty(peak_x_index)  % ピークがemptyの場合は最低周波数でピーク0に
+                    peak_x_index = 1;
                 end
-                if isempty(peaky_index)
-                    pksy_ = 0;
-                    peaky_index = 1;
+                if isempty(peak_y_index)
+                    peak_y_index = 1;
                 end
                 pxi_ = px_(:,i);    % 論理取り出しをするためにベクトルに
                 pyi_ = py_(:,i);
                 %fxi_ = fx_(:,i);
                 %fyi_ = fy_(:,i);
-                index_xwin = pxi_(peakx_index)>pyi_(peakx_index);   % xのピークの内，yの値より高かったもの
-                index_ywin = pyi_(peaky_index)>pxi_(peaky_index);
+                index_xwin = pxi_(peak_x_index)>pyi_(peak_x_index);   % xのピークの内，yの値より高かったもの
+                index_ywin = pyi_(peak_y_index)>pxi_(peak_y_index);
                 if(sum(index_xwin)==0) % x側のピークが勝てる位置がなかった
-                    maxindexx_ = peakx_index(1);
+                    maxindexx_ = peak_x_index(1);
                 else
-                    win_indexx_ = peakx_index(index_xwin);
+                    win_indexx_ = peak_x_index(index_xwin);
                     maxindexx_ = win_indexx_(1);
                 end
                 if(sum(index_ywin)==0) % y側のピークが勝てる位置がなかった
-                    maxindexy_ = peaky_index(1);
+                    maxindexy_ = peak_y_index(1);
                 else
-                    win_indexy_ = peaky_index(index_ywin);
+                    win_indexy_ = peak_y_index(index_ywin);
                     maxindexy_ = win_indexy_(1);
                 end
-                %[~, maxindexx_] = max(pksx_);    % 偏微分側の最大ピークインデックスを得る
-                %[~, maxindexy_] = max(pksy_);    % 注意) 2次モードや3次モードが最大になってしまう場合，修正の必要がある
                 obj.is_edge(i,1,t) = 0;
                 obj.is_edge(i,2,t) = 0;
                 if (obj.param.is_judge_continuous)  % 判定結果は連続？論理値？
@@ -235,8 +250,8 @@ classdef WaveInteractionSimulator < Simulator
                     obj.is_edge(i,1,t) = p_(maxindexx_,i)>px_(maxindexx_,i);
                     obj.is_edge(i,2,t) = p_(maxindexy_,i)>py_(maxindexy_,i);
                 end
-                %obj.is_edge(i,1,t) = p_(peakx_index(maxindexx_),i)>px_(peakx_index(maxindexx_),i)*sqrt(obj.param.kappa)/(2*pi*fx_(peakx_index(maxindexx_)));   % 最大
-                %obj.is_edge(i,2,t) = p_(peakx_index(maxindexy_),i)>py_(peakx_index(maxindexy_),i)*sqrt(obj.param.kappa)/(2*pi*fy_(peaky_index(maxindexy_)));
+                %obj.is_edge(i,1,t) = p_(peak_x_index(maxindexx_),i)>px_(peak_x_index(maxindexx_),i)*sqrt(obj.param.kappa)/(2*pi*fx_(peak_x_index(maxindexx_)));   % 最大
+                %obj.is_edge(i,2,t) = p_(peak_x_index(maxindexy_),i)>py_(peak_x_index(maxindexy_),i)*sqrt(obj.param.kappa)/(2*pi*fy_(peak_y_index(maxindexy_)));
                 % 補正項の詳細
                 % ピーク周波数f[Hz]としてエージェント長l. \mu次モードについて l = \mu\sqrt{\kappa}/{2f}
                 % 微分時に\pi/l倍されているはずなので，l/\pi = \um\sqrt{\kappa}/{2\pi
@@ -257,7 +272,23 @@ classdef WaveInteractionSimulator < Simulator
                     title("i = "+string(i)+", l_x = "+string(sqrt(obj.param.kappa)/2/fx_(maxindexx_))+", l_y = " + string(sqrt(obj.param.kappa)/2/fy_(maxindexy_)));
                 end
             end
-            obj = obj.judgeDeadlock(t); % デッドロック判定
+            %obj = obj.judgeDeadlock(t); % デッドロック判定
+            obj = obj.judgeDeadlockWithPeriodic(t); % デッドロック判定
+        end
+
+        function [peaks_,indeces_,n_] = findFillPeaks(~,p_,param_)
+            % FFT結果に対してピーク検出を行う．十分な数のピークがなかったら0で埋める
+            arguments
+                ~
+                p_  % FFT結果（パワー）
+                param_
+            end
+            [peaks_,indeces_] = findpeaks(p_(:),"MinPeakHeight",param_.power_threshold);    % ピーク検出
+            if length(peaks_)<param_.peak_memory_num
+                n_ = length(peaks_);
+            else
+                n_ = param_.peak_memory_num;
+            end
         end
 
         function obj = judgeDeadlock(obj,t)
@@ -270,14 +301,72 @@ classdef WaveInteractionSimulator < Simulator
             %if t>700
             %    disp("debug")
             %end
-            peak_variances_ = zeros(obj.param.Na,obj.param.peak_memory_num);    % ピークの大きさの分散
-            freq_variances_ = zeros(obj.param.Na,obj.param.peak_memory_num);    % ピークの位置の分散
             peak_variances_ = var(10*log10(obj.peaks(:,:,t-obj.param.deadlock_stepwith+1:t)),0,3);   % 時刻に沿った分散を計算．N-1で正規化
             freq_variances_ = var(obj.peak_freqs(:,:,t-obj.param.deadlock_stepwith+1:t),0,3);
             obj.is_deadlock(:,:,t) = prod(peak_variances_<obj.param.power_variance_db,2).*prod(freq_variances_<obj.param.freq_variance_hz,2);
             obj.peak_variances_db(:,:,t) = peak_variances_;
             obj.freq_variances(:,:,t) = freq_variances_;
             % 各モードの大きさ，周波数について全ての分散が閾値を下回っていたら，デッドロックと判定
+        end
+
+        function obj = judgeDeadlockWithPeriodic(obj,t)
+            % 周期性を加味したデッドロック判定
+            % @brief is_deadlock変数に1か0を返す
+            % @brief 時刻tにおけるpeakの計算後に呼び出すこと
+            if t > obj.param.minimum_store+obj.param.deadlock_stepwith
+                freq_variances_ = obj.calcPeakVariance(obj.peak_freqs,t,obj.param);  % 時刻に沿った分散を計算．N-1で正規化
+                freq_x_variances_ = obj.calcPeakVariance(obj.peak_x_freqs,t,obj.param);
+                freq_y_variances_ = obj.calcPeakVariance(obj.peak_y_freqs,t,obj.param);
+                obj.is_deadlock_variance(:,1,t) = prod(freq_variances_<obj.param.freq_variance_hz,2);
+                obj.is_deadlock_variance(:,2,t) = prod(freq_x_variances_<obj.param.freq_variance_hz,2);
+                obj.is_deadlock_variance(:,3,t) = prod(freq_y_variances_<obj.param.freq_variance_hz,2);
+            end
+            if t > obj.param.minimum_store+obj.param.deadlock_stepwith_periodic
+                for i = 1:obj.param.Na
+%                     f_ = permute(obj.peak_freqs(i,1,t-obj.param.deadlock_stepwith_periodic+1:t),[3,1,2]);
+%                     fx_ = permute(obj.peak_x_freqs(i,1,t-obj.param.deadlock_stepwith_periodic+1:t),[3,1,2]);
+%                     fy_ = permute(obj.peak_y_freqs(i,1,t-obj.param.deadlock_stepwith_periodic+1:t),[3,1,2]);
+%                     [c_,lags_] = xcorr(f_-mean(f_),'normalized');    % １次ピークに限定することに注意
+%                     [cx_,lags_x_] = xcorr(fx_-mean(fx_),'normalized');
+%                     [cy_,lags_y_] = xcorr(fy_-mean(fy_),'normalized');
+%                     [corr_peak_,corr_loc_] = findpeaks(c_,lags_,'MinPeakProminence',obj.param.periodic_coeff_threshold/2);
+%                     [corr_peak_x_,corr_loc_x_] = findpeaks(cx_,lags_x_,'MinPeakProminence',obj.param.periodic_coeff_threshold/2);
+%                     [corr_peak_y_,corr_loc_y_] = findpeaks(cy_,lags_y_,'MinPeakProminence',obj.param.periodic_coeff_threshold/2);
+%                     obj.is_deadlock_periodic(i,1,t) = max([corr_peak_(corr_loc_>obj.param.periodic_minimum_shift);0]) > obj.param.periodic_coeff_threshold;     % ピークがない場合の[]>0 = [] を避けるために，[[],0]>0 = 0 とした
+%                     obj.is_deadlock_periodic(i,2,t) = max([corr_peak_x_(corr_loc_x_>obj.param.periodic_minimum_shift);0]) > obj.param.periodic_coeff_threshold;
+%                     obj.is_deadlock_periodic(i,3,t) = max([corr_peak_y_(corr_loc_y_>obj.param.periodic_minimum_shift);0]) > obj.param.periodic_coeff_threshold;
+                    obj.is_deadlock_periodic(i,1,t) = obj.calcMaxPeriodic(obj.peak_freqs, i, t, obj.param) > obj.param.periodic_coeff_threshold;
+                    obj.is_deadlock_periodic(i,2,t) = obj.calcMaxPeriodic(obj.peak_x_freqs, i, t, obj.param) > obj.param.periodic_coeff_threshold;
+                    obj.is_deadlock_periodic(i,3,t) = obj.calcMaxPeriodic(obj.peak_y_freqs, i, t, obj.param) > obj.param.periodic_coeff_threshold;
+                end
+            end
+            obj.is_deadlock(:,:,t) = prod(obj.is_deadlock_variance(:,:,t),2) + sum(obj.is_deadlock_periodic(:,:,t),2);
+        end
+
+        function var_ = calcPeakVariance(~,freq_,t_,param_)
+            % 1行だが，解析でも使うので関数化．
+            var_ = var(freq_(:,:,t_-param_.deadlock_stepwith+1:t_),0,3);
+        end
+
+        function max_peak_ = calcMaxPeriodic(~,freq_,i_,t_,param_)
+            arguments
+                ~
+                freq_
+                i_
+                t_
+                param_
+            end
+            if t_ == 1200
+                disp("1200")
+            end
+            f_ = permute(freq_(i_,1,t_-param_.deadlock_stepwith_periodic+1:t_),[3,1,2]);   % １次ピークに限定することに注意
+            [c_,lags_] = xcorr(f_-mean(f_),'normalized');
+            [corr_peak_,corr_loc_] = findpeaks(c_,lags_,'MinPeakProminence',param_.periodic_coeff_threshold/2);
+            if (length(corr_peak_)>3)
+                max_peak_ = 0;      % ピーク数多すぎたら外す
+            else
+                max_peak_ = max([corr_peak_(corr_loc_>param_.periodic_minimum_shift);0]);
+            end
         end
 
         %%%%%%%%%%%%%%%%%%%%% 描画まわり %%%%%%%%%%%%%%%%%%
@@ -291,12 +380,13 @@ classdef WaveInteractionSimulator < Simulator
             plot(obj.t_vec, permute(obj.phi(:,1,:),[1,3,2]))
         end
 
-        function obj = spectrumPlot(obj,t,num)
+        function obj = spectrumPlot(obj,t,view_eigen,num)
             % 指定エージェントのスペクトラムを描画
             arguments
                 obj
                 t       % 時刻
-                num = [9,10]    % エージェント番号
+                view_eigen = true; % 固有値に基づく真値をプロットするか？
+                num = [24,32,40]    % エージェント番号
             end
             if t<obj.param.minimum_store    % 蓄積データ少ない間は推定しない
                 return
@@ -311,6 +401,9 @@ classdef WaveInteractionSimulator < Simulator
             [p,f] = pspectrum(permute(obj.phi(num,1,t_start_:t),[3,1,2]), obj.t_vec(t_start_:t));
             plot(f,10*log10(p));
             hold on
+            if view_eigen   % 固有値に基づく真値の描画
+                xline(sqrt(abs(obj.param.kappa*permute(obj.sigma(2:5,1,t),[3,1,2])))/2/pi,'--k',"$f_"+string((2:5)-1)+"$",'Interpreter','latex','LineWidth',0.5,'FontSize',14)
+            end
             for mu = 1:obj.param.peak_memory_num
                 plot(obj.peak_freqs(num,mu,t),10*log10(obj.peaks(num,mu,t)),'o');
             end
@@ -319,6 +412,46 @@ classdef WaveInteractionSimulator < Simulator
             ylim([-100,20])
             xlim([0,10])
             legend(string(num))
+        end
+
+        function spectrumPlotDiff(obj,t,view_eigen,num)
+            % 指定エージェントのスペクトラムを，空間微分含めて描画
+            arguments
+                obj
+                t       % 時刻
+                view_eigen = true; % 固有値に基づく真値をプロットするか？
+                num {mustBeNumeric} = 32;    % エージェント番号
+            end
+            if t<obj.param.minimum_store    % 蓄積データ少ない間は推定しない
+                return
+            end
+            if t>obj.param.time_histry
+                % 時刻が推定に使うデータ点数より多いかどうかで，使う時刻幅を変える
+                t_start_ = t-obj.param.time_histry;
+            else
+                t_start_ = 1;
+            end
+            % 各位相情報に関するパワースペクトラム p_は [周波数,チャンネル]となっているので注意
+            [p,f] = pspectrum(permute(obj.phi(num,1,t_start_:t),[3,1,2]), obj.t_vec(t_start_:t));
+            [px,fx] = pspectrum(permute(obj.phi_x(num,1,t_start_:t),[3,1,2]), obj.t_vec(t_start_:t));
+            [py,fy] = pspectrum(permute(obj.phi_x(num,2,t_start_:t),[3,1,2]), obj.t_vec(t_start_:t));
+            plot(f,10*log10(p));
+            hold on
+            plot(fx,10*log10(px));
+            plot(fy,10*log10(py));
+            if view_eigen   % 固有値に基づく真値の描画
+                xline(sqrt(abs(obj.param.kappa*permute(obj.sigma(2:5,1,t),[3,1,2])))/2/pi,'--k',"$f_"+string((2:5)-1)+"$",'Interpreter','latex','LineWidth',0.5,'FontSize',14)
+            end
+            for mu = 1:obj.param.peak_memory_num
+                plot(obj.peak_freqs(num,mu,t),10*log10(obj.peaks(num,mu,t)),'o');
+                plot(obj.peak_x_freqs(num,mu,t),10*log10(obj.peaks_x(num,mu,t)),'o');
+                plot(obj.peak_y_freqs(num,mu,t),10*log10(obj.peaks_y(num,mu,t)),'o');
+            end
+            hold off
+            text(max(f)*0.7, 0, "t = "+string(t), 'FontSize',12);
+            ylim([-100,20])
+            xlim([0,10])
+            legend(["\phi","\partial_x\phi","\partial_y\phi"])
         end
 
         function peakAndFreqPlot(obj,num)
@@ -352,20 +485,32 @@ classdef WaveInteractionSimulator < Simulator
             end
         end
 
-        function peakAndFreqPlot2(obj,num)
+        function peakAndFreqPlot2(obj,num,diff_)
             % 特定エージェントのピーク及びピーク周波数の時刻履歴を，【ピーク毎に】プロット
             arguments
                 obj
                 num = 8 % 表示対象のエージェント
+                diff_ {mustBeMember(diff_,["","x","y"])} = ""
             end
             
+            if diff_ == "x"
+                p_ = obj.peaks_x;
+                f_ = obj.peak_x_freqs;
+            elseif diff_ == "y"
+                p_ = obj.peaks_y;
+                f_ = obj.peak_y_freqs;
+            else
+                p_ = obj.peaks;
+                f_ = obj.peak_freqs;
+            end
+
             for mu = 1:obj.param.peak_memory_num
                 figure
-                plot(1:obj.param.Nt, permute(10*log10(obj.peaks(num,mu,:)),[3,1,2]))
+                plot(1:obj.param.Nt, permute(10*log10(p_(num,mu,:)),[3,1,2]))
                 l = legend(string(num));
                 l.NumColumns = 4;
                 ylim([-100,100])
-                xlim([0,1000])
+                xlim([0,1500])
                 ylabel("Power of Peaks [dB]")
                 xlabel("TIme Step")
                 title("mode "+string(mu))
@@ -373,11 +518,11 @@ classdef WaveInteractionSimulator < Simulator
             
             for mu = 1:obj.param.peak_memory_num
                 figure
-                plot(1:obj.param.Nt, permute(obj.peak_freqs(num,mu,:),[3,1,2]))
+                plot(1:obj.param.Nt, permute(f_(num,mu,:),[3,1,2]))
                 l = legend(string(num));
                 l.NumColumns = 4;
                 %ylim([-100,100])
-                xlim([0,1000])
+                xlim([0,1500])
                 ylabel("Frequency of Peaks [Hz]")
                 xlabel("TIme Step")
                 title("mode "+string(mu))
@@ -398,6 +543,71 @@ classdef WaveInteractionSimulator < Simulator
             xlim([0,1000])
             ylabel("is deadlock")
             xlabel("TIme Step")
+        end
+
+        function obj = peakVariancePlot(obj,num,dim)
+            arguments
+                obj
+                num         % 表示対象のエージェント
+                dim = 1     % 表示対象のモード
+            end
+            figure
+            freq_variances_ = zeros(length(num),length(dim),obj.param.Nt);
+            freq_x_variances_ = zeros(length(num),length(dim),obj.param.Nt);
+            freq_y_variances_ = zeros(length(num),length(dim),obj.param.Nt);
+            for t = obj.param.minimum_store+obj.param.deadlock_stepwith:obj.param.Nt
+%                 freq_variances_(:,:,t) = var(obj.peak_freqs(num,dim,t-obj.param.deadlock_stepwith+1:t),0,3);   % 時刻に沿った分散を計算．N-1で正規化
+%                 freq_x_variances_(:,:,t) = var(obj.peak_x_freqs(num,dim,t-obj.param.deadlock_stepwith+1:t),0,3);
+%                 freq_y_variances_(:,:,t) = var(obj.peak_y_freqs(num,dim,t-obj.param.deadlock_stepwith+1:t),0,3);
+                freq_variances_(:,:,t) = obj.calcPeakVariance(obj.peak_freqs(num,dim,:),t,obj.param);
+                freq_x_variances_(:,:,t) = obj.calcPeakVariance(obj.peak_x_freqs(num,dim,:),t,obj.param);
+                freq_y_variances_(:,:,t) = obj.calcPeakVariance(obj.peak_y_freqs(num,dim,:),t,obj.param);
+            end
+            for i = 1:length(dim)
+                ylabel_str = "variance of \phi"+["","_x","_y"]+" (Hz^2)";
+                fv_(:,:,1) = permute(freq_variances_(:,i,:),[1,3,2]);
+                fv_(:,:,2) = permute(freq_x_variances_(:,i,:),[1,3,2]);
+                fv_(:,:,3) = permute(freq_y_variances_(:,i,:),[1,3,2]);
+                for j = 1:3
+                    subplot(3,length(dim),j+3*(i-1))
+                    semilogy(1:obj.param.Nt,fv_(:,:,j))
+                    hold on
+                    legend(string(num))
+                    xlabel("timestep")
+                    ylabel(ylabel_str(j))
+                    yline(obj.param.freq_variance_hz)
+                    hold off
+                end
+            end
+        end
+
+        function obj = peakPeriodicPlot(obj,num)
+            arguments
+                obj
+                num         % 表示対象のエージェント
+            end
+            figure
+            periodic_ = zeros(length(num),3,obj.param.Nt);
+            for t = obj.param.minimum_store+obj.param.deadlock_stepwith_periodic:obj.param.Nt
+                for i = 1:length(num)
+                    periodic_(i,1,t) = obj.calcMaxPeriodic(obj.peak_freqs, num(i), t, obj.param);
+                    periodic_(i,2,t) = obj.calcMaxPeriodic(obj.peak_x_freqs, num(i), t, obj.param);
+                    periodic_(i,3,t) = obj.calcMaxPeriodic(obj.peak_y_freqs, num(i), t, obj.param);
+%                     obj.is_deadlock_periodic(i,2,t) = obj.calcMaxPeriodic(obj.peak_x_freqs, i, t, obj.param) > obj.param.periodic_coeff_threshold;
+%                     obj.is_deadlock_periodic(i,3,t) = obj.calcMaxPeriodic(obj.peak_y_freqs, i, t, obj.param) > obj.param.periodic_coeff_threshold;
+                end
+            end
+            ylabel_str = "periodic of \phi"+["","_x","_y"]+" (Hz^2)";
+            for j = 1:3
+                subplot(3,1,j)
+                plot(1:obj.param.Nt,permute(periodic_(:,j,:),[1,3,2]))
+                hold on
+                legend(string(num))
+                xlabel("timestep")
+                ylabel(ylabel_str(j))
+                yline(obj.param.periodic_coeff_threshold)
+                hold off
+            end
         end
 
         function obj = variancePlot(obj,num)

@@ -31,6 +31,7 @@ classdef SwarmWithWaveInteractionSimulation < MobileRobots2dSimulator
             obj.param.kd = 1;   % 粘性項
             obj.param.attract_force_type = "field_xy";% x方向のみ誘導力の形式
             obj.param.is_debug_view = false;    % デバッグ表示をするか？
+            obj.param.minimal_u = 1e-6;         % これ以下の入力を打ち切る
             % kp調整 %
             obj.param.deadlock_source = "cos";   % デッドロック判定のソースは？
             obj.param.do_kp_adjust = false; % デッドロック時のkp調整を実施？
@@ -91,7 +92,8 @@ classdef SwarmWithWaveInteractionSimulation < MobileRobots2dSimulator
             %%%% デッドロック判定とその利用 %%%%
             obj = obj.stopDetect(t);    % 停止検知
             if obj.param.deadlock_source == "cos"
-                obj.is_deadlock(:,1,t) = obj.cos.is_deadlock(:,1,t);    % COSによるデッドロック判定を利用
+                obj.is_deadlock(:,1,t) = obj.cos.is_deadlock(:,1,t).*obj.is_stop(:,1,t);    % COSによるデッドロック判定を利用
+                %obj.is_deadlock(:,1,t) = obj.cos.is_deadlock(:,1,t);
             elseif obj.param.deadlock_source == "stop"
                 obj.is_deadlock(:,1,t) = obj.is_stop(:,1,t);            % 停止検知をデッドロック判定として利用
             end
@@ -105,8 +107,10 @@ classdef SwarmWithWaveInteractionSimulation < MobileRobots2dSimulator
             % ロボットのポジションインデックスの計算 round( (x-x_min)/dx )+1 結果は[エージェント数,空間次元]
             for i = 1:obj.param.Na
                 %u_p(i,:) = obj.param.kp*( obj.attract_field.cx(pos_index(i,1), pos_index(i,2))*[1 0] + obj.attract_field.cy(pos_index(i,1), pos_index(i,2))*[0 1] );
-                cx = obj.attract_field.cx(pos_index(i,1), pos_index(i,2));
-                cy = obj.attract_field.cy(pos_index(i,1), pos_index(i,2));
+                if (obj.param.attract_force_type == "field_xonly") || (obj.param.attract_force_type == "field_xy")
+                    cx = obj.attract_field.cx(pos_index(i,1), pos_index(i,2));
+                    cy = obj.attract_field.cy(pos_index(i,1), pos_index(i,2));
+                end
                 if obj.param.attract_force_type == "field_xonly"
                     u_p(i,:) = obj.param.kp*obj.kp_adjust(i,:,t)*( cx*[1 0] )/norm([cx,cy]);   % 誘導場をx方向のみ利用
                 elseif obj.param.attract_force_type == "field_xy"
@@ -134,27 +138,28 @@ classdef SwarmWithWaveInteractionSimulation < MobileRobots2dSimulator
             %%%% CBF %%%%
             % 詳細はCollisionAvoidanceCBF.mを参照
             x_io = obj.calcVectorToWalls(t);    % 壁との相対位置ベクトル
+            dXdt = repmat(obj.dxdt(:,1,t),1,obj.param.Na);
+            dYdt = repmat(obj.dxdt(:,2,t),1,obj.param.Na);
+            dXdt_ij = dXdt.'-dXdt;
+            dYdt_ij = dYdt.'-dYdt;
+            cbf_(obj.param.Na) = obj.cbf;
+            dxdt_ = obj.dxdt(:,:,t);
+            lambda_lower_t = obj.lambda_history_lower(:,:,t);   % lambda_lower_tを初期化し，要素数を確定
+            lambda_upper_t = obj.lambda_history_upper(:,:,t);
+            param_ = obj.param;
             for i = 1:obj.param.Na
-                % ロボット間衝突回避CBF %
-                obj.cbf = obj.cbf.setParameters(1,obj.param.cbf_rs,obj.param.dt,obj.param.cbf_gamma,true);
-                x_ij = obj.x(:,:,t) - obj.x(i,:,t);          % 相対位置ベクトル
-                dxdt_ij = obj.dxdt(:,:,t) - obj.dxdt(i,:,t); % 相対速度ベクトル
-                obj.cbf = obj.cbf.addConstraints([x_ij(Adj(:,i)==1,1), x_ij(Adj(:,i)==1,2)], [dxdt_ij(Adj(:,i)==1,1), dxdt_ij(Adj(:,i)==1,2)]);
-                % 隣接ロボットとの相対ベクトルのみCBF制約として利用
-                % 壁との衝突回避CBF %
-                obj.cbf = obj.cbf.setParameters(1,obj.param.cbf_rs,obj.param.dt,obj.param.cbf_gamma,false);
-                obj.cbf = obj.cbf.addConstraints(permute(x_io(i,:,:),[3,2,1]), -repmat(obj.dxdt(i,:,t),length(x_io(i,:,:)),1));
-                % 壁との相対位置ベクトルと，自身の速度ベクトル(壁との相対速度ベクトル)をCBFに入れる
-                % 入力範囲の制限 %
-                obj.cbf = obj.cbf.addInputMinMaxConstraint(obj.param.cbf_lb,obj.param.cbf_ub);
+            %parfor i = 1:obj.param.Na
                 % CBFの適用 %
-                [u_t(i,:),lambda_] = obj.cbf.apply(u_nominal(i,:));
-                obj.lambda_history_lower(i,:,t) = (lambda_.lower).';
-                obj.lambda_history_upper(i,:,t) = (lambda_.upper).';
-                obj.cbf = obj.cbf.clearConstraints();
+                [u_t(i,:),lambda_] = calcEachCBF(param_,[X_ij(i,:).', Y_ij(i,:).'], [dXdt_ij(i,:).', dYdt_ij(i,:).'], x_io(i,:,:), dxdt_(i,:), Adj(:,i), u_nominal(i,:),cbf_(i));
+                lambda_lower_t(i,:,1) = (lambda_.lower).';
+                lambda_upper_t(i,:,1) = (lambda_.upper).';
+                cbf_(i) = cbf_(i).clearConstraints();
             end
+            obj.lambda_history_lower(:,:,t) = lambda_lower_t;
+            obj.lambda_history_upper(:,:,t) = lambda_upper_t;
 
             %%%% 最終的な入力の生成 %%%%
+            u_t = u_t .* (vecnorm(u_t,2,2)>obj.param.minimal_u);                 % 入力が小さすぎる場合は打ち切り
             obj.u(:,:,t) = u_t - obj.param.kd*obj.dxdt(:,:,t);  % CBF後に粘性が入っている…
 
             %%%% デバッグ %%%%
@@ -237,7 +242,8 @@ classdef SwarmWithWaveInteractionSimulation < MobileRobots2dSimulator
             if (is_delete)
                 delete(gca)
             end
-            obj = obj.placePlot(t,false, (-1+2*obj.cos.is_edge(:,dim,t)).*obj.cos.is_deadlock(:,1,t));
+            %obj = obj.placePlot(t,false, (-1+2*obj.cos.is_edge(:,dim,t)).*obj.cos.is_deadlock(:,1,t));
+            obj = obj.placePlot(t,false, (-1+2*obj.cos.is_edge(:,dim,t)).*obj.is_deadlock(:,1,t));
             clim([-1,1])
             colorbar
             text(obj.param.space_x(2)*0.65, obj.param.space_y(2)*0.8, "t = "+string(t), 'FontSize',12);

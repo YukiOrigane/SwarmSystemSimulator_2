@@ -88,7 +88,7 @@ classdef MobileRobots2dSimulator < Simulator
                 % ループ毎の更新をここに
                 obj.G = obj.calcGraph(t);
                 obj = obj.calcControlInput(t);  % 入力の計算
-                obj.x(:,:,t+1) = obj.x(:,:,t) + obj.param.dt*obj.dxdt(:,:,t);   % オイラー法による更新
+                obj.x(:,:,t+1) = obj.x(:,:,t) + obj.param.dt*obj.dxdt(:,:,t);   % オイラー法による更新      %%%% DEBUG HERE!!!!!
                 obj.dxdt(:,:,t+1) = obj.dxdt(:,:,t) + obj.param.dt*obj.u(:,:,t);
             end % for
             toc
@@ -211,12 +211,15 @@ classdef MobileRobots2dSimulator < Simulator
             hold on
         end
 
-        function obj = showEdges(obj,t)
-            G_ = obj.calcGraph(t);  % グラフ計算
-            e_ = table2array(G_.Edges);          % エッジ取得
-            x_ = obj.x(:,1,t); 
-            y_ = obj.x(:,2,t); 
-            line(x_(e_).', y_(e_).','Color',"#0072BD",'LineWidth',1); % エッジの描画
+        function obj = numberPlacePlot(obj, t, view_edge)
+            % ロボットの位置とロボットナンバーを描画
+            arguments
+                obj
+                t               % 時刻
+                view_edge = false                    % エッジ表示するか？
+            end
+            obj.placePlot(t,view_edge);
+            text(obj.x(:,1,t)-0.1,obj.x(:,2,t)-0.1,string(1:obj.param.Na),'FontSize',12);
         end
         
         function obj = showWalls(obj)
