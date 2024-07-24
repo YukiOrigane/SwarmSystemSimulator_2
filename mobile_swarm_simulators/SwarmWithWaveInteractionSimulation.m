@@ -92,7 +92,8 @@ classdef SwarmWithWaveInteractionSimulation < MobileRobots2dSimulator
             %%%% デッドロック判定とその利用 %%%%
             obj = obj.stopDetect(t);    % 停止検知
             if obj.param.deadlock_source == "cos"
-                obj.is_deadlock(:,1,t) = obj.cos.is_deadlock(:,1,t);    % COSによるデッドロック判定を利用
+                obj.is_deadlock(:,1,t) = obj.cos.is_deadlock(:,1,t).*obj.is_stop(:,1,t);    % COSによるデッドロック判定を利用
+                %obj.is_deadlock(:,1,t) = obj.cos.is_deadlock(:,1,t);
             elseif obj.param.deadlock_source == "stop"
                 obj.is_deadlock(:,1,t) = obj.is_stop(:,1,t);            % 停止検知をデッドロック判定として利用
             end
@@ -106,8 +107,10 @@ classdef SwarmWithWaveInteractionSimulation < MobileRobots2dSimulator
             % ロボットのポジションインデックスの計算 round( (x-x_min)/dx )+1 結果は[エージェント数,空間次元]
             for i = 1:obj.param.Na
                 %u_p(i,:) = obj.param.kp*( obj.attract_field.cx(pos_index(i,1), pos_index(i,2))*[1 0] + obj.attract_field.cy(pos_index(i,1), pos_index(i,2))*[0 1] );
-                cx = obj.attract_field.cx(pos_index(i,1), pos_index(i,2));
-                cy = obj.attract_field.cy(pos_index(i,1), pos_index(i,2));
+                if (obj.param.attract_force_type == "field_xonly") || (obj.param.attract_force_type == "field_xy")
+                    cx = obj.attract_field.cx(pos_index(i,1), pos_index(i,2));
+                    cy = obj.attract_field.cy(pos_index(i,1), pos_index(i,2));
+                end
                 if obj.param.attract_force_type == "field_xonly"
                     u_p(i,:) = obj.param.kp*obj.kp_adjust(i,:,t)*( cx*[1 0] )/norm([cx,cy]);   % 誘導場をx方向のみ利用
                 elseif obj.param.attract_force_type == "field_xy"
@@ -239,7 +242,8 @@ classdef SwarmWithWaveInteractionSimulation < MobileRobots2dSimulator
             if (is_delete)
                 delete(gca)
             end
-            obj = obj.placePlot(t,false, (-1+2*obj.cos.is_edge(:,dim,t)).*obj.cos.is_deadlock(:,1,t));
+            %obj = obj.placePlot(t,false, (-1+2*obj.cos.is_edge(:,dim,t)).*obj.cos.is_deadlock(:,1,t));
+            obj = obj.placePlot(t,false, (-1+2*obj.cos.is_edge(:,dim,t)).*obj.is_deadlock(:,1,t));
             clim([-1,1])
             colorbar
             text(obj.param.space_x(2)*0.65, obj.param.space_y(2)*0.8, "t = "+string(t), 'FontSize',12);

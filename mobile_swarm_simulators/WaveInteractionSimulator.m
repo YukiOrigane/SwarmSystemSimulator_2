@@ -314,30 +314,59 @@ classdef WaveInteractionSimulator < Simulator
             % @brief is_deadlock変数に1か0を返す
             % @brief 時刻tにおけるpeakの計算後に呼び出すこと
             if t > obj.param.minimum_store+obj.param.deadlock_stepwith
-                freq_variances_ = var(obj.peak_freqs(:,:,t-obj.param.deadlock_stepwith+1:t),0,3);   % 時刻に沿った分散を計算．N-1で正規化
-                freq_x_variances_ = var(obj.peak_x_freqs(:,:,t-obj.param.deadlock_stepwith+1:t),0,3);
-                freq_y_variances_ = var(obj.peak_y_freqs(:,:,t-obj.param.deadlock_stepwith+1:t),0,3);
+                freq_variances_ = obj.calcPeakVariance(obj.peak_freqs,t,obj.param);  % 時刻に沿った分散を計算．N-1で正規化
+                freq_x_variances_ = obj.calcPeakVariance(obj.peak_x_freqs,t,obj.param);
+                freq_y_variances_ = obj.calcPeakVariance(obj.peak_y_freqs,t,obj.param);
                 obj.is_deadlock_variance(:,1,t) = prod(freq_variances_<obj.param.freq_variance_hz,2);
                 obj.is_deadlock_variance(:,2,t) = prod(freq_x_variances_<obj.param.freq_variance_hz,2);
                 obj.is_deadlock_variance(:,3,t) = prod(freq_y_variances_<obj.param.freq_variance_hz,2);
             end
             if t > obj.param.minimum_store+obj.param.deadlock_stepwith_periodic
                 for i = 1:obj.param.Na
-                    f_ = permute(obj.peak_freqs(i,1,t-obj.param.deadlock_stepwith_periodic+1:t),[3,1,2]);
-                    fx_ = permute(obj.peak_x_freqs(i,1,t-obj.param.deadlock_stepwith_periodic+1:t),[3,1,2]);
-                    fy_ = permute(obj.peak_y_freqs(i,1,t-obj.param.deadlock_stepwith_periodic+1:t),[3,1,2]);
-                    [c_,lags_] = xcorr(f_-mean(f_),'normalized');    % １次ピークに限定することに注意
-                    [cx_,lags_x_] = xcorr(fx_-mean(fx_),'normalized');
-                    [cy_,lags_y_] = xcorr(fy_-mean(fy_),'normalized');
-                    [corr_peak_,corr_loc_] = findpeaks(c_,lags_,'MinPeakProminence',obj.param.periodic_coeff_threshold/2);
-                    [corr_peak_x_,corr_loc_x_] = findpeaks(cx_,lags_x_,'MinPeakProminence',obj.param.periodic_coeff_threshold/2);
-                    [corr_peak_y_,corr_loc_y_] = findpeaks(cy_,lags_y_,'MinPeakProminence',obj.param.periodic_coeff_threshold/2);
-                    obj.is_deadlock_periodic(i,1,t) = max([corr_peak_(corr_loc_>obj.param.periodic_minimum_shift);0]) > obj.param.periodic_coeff_threshold;     % ピークがない場合の[]>0 = [] を避けるために，[[],0]>0 = 0 とした
-                    obj.is_deadlock_periodic(i,2,t) = max([corr_peak_x_(corr_loc_x_>obj.param.periodic_minimum_shift);0]) > obj.param.periodic_coeff_threshold;
-                    obj.is_deadlock_periodic(i,3,t) = max([corr_peak_y_(corr_loc_y_>obj.param.periodic_minimum_shift);0]) > obj.param.periodic_coeff_threshold;
+%                     f_ = permute(obj.peak_freqs(i,1,t-obj.param.deadlock_stepwith_periodic+1:t),[3,1,2]);
+%                     fx_ = permute(obj.peak_x_freqs(i,1,t-obj.param.deadlock_stepwith_periodic+1:t),[3,1,2]);
+%                     fy_ = permute(obj.peak_y_freqs(i,1,t-obj.param.deadlock_stepwith_periodic+1:t),[3,1,2]);
+%                     [c_,lags_] = xcorr(f_-mean(f_),'normalized');    % １次ピークに限定することに注意
+%                     [cx_,lags_x_] = xcorr(fx_-mean(fx_),'normalized');
+%                     [cy_,lags_y_] = xcorr(fy_-mean(fy_),'normalized');
+%                     [corr_peak_,corr_loc_] = findpeaks(c_,lags_,'MinPeakProminence',obj.param.periodic_coeff_threshold/2);
+%                     [corr_peak_x_,corr_loc_x_] = findpeaks(cx_,lags_x_,'MinPeakProminence',obj.param.periodic_coeff_threshold/2);
+%                     [corr_peak_y_,corr_loc_y_] = findpeaks(cy_,lags_y_,'MinPeakProminence',obj.param.periodic_coeff_threshold/2);
+%                     obj.is_deadlock_periodic(i,1,t) = max([corr_peak_(corr_loc_>obj.param.periodic_minimum_shift);0]) > obj.param.periodic_coeff_threshold;     % ピークがない場合の[]>0 = [] を避けるために，[[],0]>0 = 0 とした
+%                     obj.is_deadlock_periodic(i,2,t) = max([corr_peak_x_(corr_loc_x_>obj.param.periodic_minimum_shift);0]) > obj.param.periodic_coeff_threshold;
+%                     obj.is_deadlock_periodic(i,3,t) = max([corr_peak_y_(corr_loc_y_>obj.param.periodic_minimum_shift);0]) > obj.param.periodic_coeff_threshold;
+                    obj.is_deadlock_periodic(i,1,t) = obj.calcMaxPeriodic(obj.peak_freqs, i, t, obj.param) > obj.param.periodic_coeff_threshold;
+                    obj.is_deadlock_periodic(i,2,t) = obj.calcMaxPeriodic(obj.peak_x_freqs, i, t, obj.param) > obj.param.periodic_coeff_threshold;
+                    obj.is_deadlock_periodic(i,3,t) = obj.calcMaxPeriodic(obj.peak_y_freqs, i, t, obj.param) > obj.param.periodic_coeff_threshold;
                 end
             end
             obj.is_deadlock(:,:,t) = prod(obj.is_deadlock_variance(:,:,t),2) + sum(obj.is_deadlock_periodic(:,:,t),2);
+        end
+
+        function var_ = calcPeakVariance(~,freq_,t_,param_)
+            % 1行だが，解析でも使うので関数化．
+            var_ = var(freq_(:,:,t_-param_.deadlock_stepwith+1:t_),0,3);
+        end
+
+        function max_peak_ = calcMaxPeriodic(~,freq_,i_,t_,param_)
+            arguments
+                ~
+                freq_
+                i_
+                t_
+                param_
+            end
+            if t_ == 1200
+                disp("1200")
+            end
+            f_ = permute(freq_(i_,1,t_-param_.deadlock_stepwith_periodic+1:t_),[3,1,2]);   % １次ピークに限定することに注意
+            [c_,lags_] = xcorr(f_-mean(f_),'normalized');
+            [corr_peak_,corr_loc_] = findpeaks(c_,lags_,'MinPeakProminence',param_.periodic_coeff_threshold/2);
+            if (length(corr_peak_)>3)
+                max_peak_ = 0;      % ピーク数多すぎたら外す
+            else
+                max_peak_ = max([corr_peak_(corr_loc_>param_.periodic_minimum_shift);0]);
+            end
         end
 
         %%%%%%%%%%%%%%%%%%%%% 描画まわり %%%%%%%%%%%%%%%%%%
@@ -514,6 +543,71 @@ classdef WaveInteractionSimulator < Simulator
             xlim([0,1000])
             ylabel("is deadlock")
             xlabel("TIme Step")
+        end
+
+        function obj = peakVariancePlot(obj,num,dim)
+            arguments
+                obj
+                num         % 表示対象のエージェント
+                dim = 1     % 表示対象のモード
+            end
+            figure
+            freq_variances_ = zeros(length(num),length(dim),obj.param.Nt);
+            freq_x_variances_ = zeros(length(num),length(dim),obj.param.Nt);
+            freq_y_variances_ = zeros(length(num),length(dim),obj.param.Nt);
+            for t = obj.param.minimum_store+obj.param.deadlock_stepwith:obj.param.Nt
+%                 freq_variances_(:,:,t) = var(obj.peak_freqs(num,dim,t-obj.param.deadlock_stepwith+1:t),0,3);   % 時刻に沿った分散を計算．N-1で正規化
+%                 freq_x_variances_(:,:,t) = var(obj.peak_x_freqs(num,dim,t-obj.param.deadlock_stepwith+1:t),0,3);
+%                 freq_y_variances_(:,:,t) = var(obj.peak_y_freqs(num,dim,t-obj.param.deadlock_stepwith+1:t),0,3);
+                freq_variances_(:,:,t) = obj.calcPeakVariance(obj.peak_freqs(num,dim,:),t,obj.param);
+                freq_x_variances_(:,:,t) = obj.calcPeakVariance(obj.peak_x_freqs(num,dim,:),t,obj.param);
+                freq_y_variances_(:,:,t) = obj.calcPeakVariance(obj.peak_y_freqs(num,dim,:),t,obj.param);
+            end
+            for i = 1:length(dim)
+                ylabel_str = "variance of \phi"+["","_x","_y"]+" (Hz^2)";
+                fv_(:,:,1) = permute(freq_variances_(:,i,:),[1,3,2]);
+                fv_(:,:,2) = permute(freq_x_variances_(:,i,:),[1,3,2]);
+                fv_(:,:,3) = permute(freq_y_variances_(:,i,:),[1,3,2]);
+                for j = 1:3
+                    subplot(3,length(dim),j+3*(i-1))
+                    semilogy(1:obj.param.Nt,fv_(:,:,j))
+                    hold on
+                    legend(string(num))
+                    xlabel("timestep")
+                    ylabel(ylabel_str(j))
+                    yline(obj.param.freq_variance_hz)
+                    hold off
+                end
+            end
+        end
+
+        function obj = peakPeriodicPlot(obj,num)
+            arguments
+                obj
+                num         % 表示対象のエージェント
+            end
+            figure
+            periodic_ = zeros(length(num),3,obj.param.Nt);
+            for t = obj.param.minimum_store+obj.param.deadlock_stepwith_periodic:obj.param.Nt
+                for i = 1:length(num)
+                    periodic_(i,1,t) = obj.calcMaxPeriodic(obj.peak_freqs, num(i), t, obj.param);
+                    periodic_(i,2,t) = obj.calcMaxPeriodic(obj.peak_x_freqs, num(i), t, obj.param);
+                    periodic_(i,3,t) = obj.calcMaxPeriodic(obj.peak_y_freqs, num(i), t, obj.param);
+%                     obj.is_deadlock_periodic(i,2,t) = obj.calcMaxPeriodic(obj.peak_x_freqs, i, t, obj.param) > obj.param.periodic_coeff_threshold;
+%                     obj.is_deadlock_periodic(i,3,t) = obj.calcMaxPeriodic(obj.peak_y_freqs, i, t, obj.param) > obj.param.periodic_coeff_threshold;
+                end
+            end
+            ylabel_str = "periodic of \phi"+["","_x","_y"]+" (Hz^2)";
+            for j = 1:3
+                subplot(3,1,j)
+                plot(1:obj.param.Nt,permute(periodic_(:,j,:),[1,3,2]))
+                hold on
+                legend(string(num))
+                xlabel("timestep")
+                ylabel(ylabel_str(j))
+                yline(obj.param.periodic_coeff_threshold)
+                hold off
+            end
         end
 
         function obj = variancePlot(obj,num)

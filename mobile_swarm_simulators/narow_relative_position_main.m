@@ -12,11 +12,11 @@ simulation.setFigureProperty("large");                  % 描画の基本設定�
 
 
 %% シミュレーションの実施 : 単発
-simulation = simulation.setParam("environment_file","setting_files/environments/narrow_space_w_2_5_vertical_short.m");   % パラメタ変更
+simulation = simulation.setParam("environment_file","setting_files/environments/narrow_space_w_2_5_vertical_short_nonright_wall.m");   % パラメタ変更
 %simulation = simulation.setParam("environment_file","setting_files/environments/narrow_space_w_2_5_vertical.m");   % パラメタ変更
 %simulation = simulation.setParam("placement_file","setting_files/init_conditions/narrow_20.m");   % パラメタ変更
-%simulation = simulation.setParam("placement_file","setting_files/init_conditions/narrow_40.m");   % パラメタ変更
-simulation = simulation.setParam("placement_file","setting_files/init_conditions/read_mat_file.m");   % パラメタ変更
+simulation = simulation.setParam("placement_file","setting_files/init_conditions/narrow_40.m");   % パラメタ変更
+%simulation = simulation.setParam("placement_file","setting_files/init_conditions/read_mat_file.m");   % パラメタ変更
 % COS %
 simulation.cos = simulation.cos.setParam("kappa",80);
 simulation.cos = simulation.cos.setParam("do_estimate",true);
@@ -30,7 +30,7 @@ simulation = simulation.setParam("stop_threshold",10^-3);
 simulation = simulation.setParam("kp",8);   % Swarm : 勾配追従力ゲインisou
 simulation = simulation.setParam("kf",0);  % Swarm : 群形成力ゲイン
 simulation = simulation.setParam("kd",10);   % Swarm : 粘性ゲイン
-simulation = simulation.setParam("Nt",1500);
+simulation = simulation.setParam("Nt",2000);
 simulation = simulation.setParam("is_debug_view",false);
 simulation = simulation.setParam("initial_pos_variance", 0);
 %simulation = simulation.setParam("attract_force_type", "linear_fbx");
@@ -43,12 +43,17 @@ simulation = simulation.setParam("cbf_ub", []); % 入力上限 ex) [10; 10]
 % kp調整 %
 simulation = simulation.setParam("deadlock_source","cos");
 simulation = simulation.setParam("do_kp_adjust",true);  % kp調整を実施？
-%simulation = simulation.setParam("kp_adjust_out",-0.1);
-simulation = simulation.setParam("kp_adjust_out",1.2);  % デバッグ用．内外で行動切り替えをせずデッドロックを維持する
+simulation = simulation.setParam("kp_adjust_out",-0.1);
+%simulation = simulation.setParam("kp_adjust_out",1.2);  % デバッグ用．内外で行動切り替えをせずデッドロックを維持する
 %simulation = simulation.setParam("kp_adjust_in",-0.3);
 simulation = simulation.setParam("kp_adjust_in",1.2);
 simulation = simulation.setParam("adjust_stepwith",80);
 %simulation = simulation.setParam("dxdt_0",[[0 0];[0 0]]);   % パラメタ変更
+% デッドロック %
+simulation.cos = simulation.cos.setParam("deadlock_stepwith",256);
+simulation.cos = simulation.cos.setParam("periodic_coeff_threshold",0.2);
+
+
 % 本番 %
 simulation = simulation.readSettingFiles(); % 設定ファイルの読み込み
 rng(5);     % 乱数の固定
@@ -62,7 +67,7 @@ simulation.placePlot(650);
 %simulation.numberPlacePlot(510);
 % simulation.cos = simulation.cos.plot();
 % simulation = simulation.generateMovieEstimate();
-simulation = simulation.generateMovieEstimate("0715_Na40_motion.mp4",8);
+simulation = simulation.generateMovieEstimate("0723_Na40_motion.mp4",8);
 simulation = simulation.setParam("is_debug_view",true);
 simulation = simulation.calcControlInput(10);
 % simulation.cos.relativePositionEstimate(750,[8,9,10]);  % 推定デバッグ表示
@@ -75,29 +80,58 @@ simulation = simulation.calcControlInput(10);
 % simulation.cos.spectrumPlotDiff(1445,true,48);   % 特定時刻スペクトラムプロット
 % simulation.cos.generateSpectrumMovie("0701_Na40.mp4");
 % simulation.cos.deadlockPlot([1,5:20]);
-% simulation.cos.variancePlot([1,5:20]);
+% simulation.cos.variancePlot([1,6:20]);
 % simulation.kpAdjustPlot([1,5:20]);
 % simulation.minimumDistanceCheck();
 % simulation.deadlockDetectionPlot("result");
 % simulation.stopDetect(600);
-% simulation.variancePlot([1,5:20]);
+% simulation.variancePlot([1,6:20]);
 % simulation.lambdaPlot();
 % simulation.controlInputPlot();
+simulation.cos.peakVariancePlot(40);
+simulation.cos.peakPeriodicPlot(40);
+
+
 simulation.obtainNumberOfPassedRobots();
 
-subplot(6,1,1)
-imagesc(permute(simulation.cos.is_deadlock_variance(:,1,:),[1,3,2]))
-subplot(6,1,2)
-imagesc(permute(simulation.cos.is_deadlock_variance(:,2,:),[1,3,2]))
-subplot(6,1,3)
-imagesc(permute(simulation.cos.is_deadlock_variance(:,3,:),[1,3,2]))
-subplot(6,1,4)
-imagesc(permute(simulation.cos.is_deadlock_periodic(:,1,:),[1,3,2]))
-subplot(6,1,5)
-imagesc(permute(simulation.cos.is_deadlock_periodic(:,2,:),[1,3,2]))
-subplot(6,1,6)
-imagesc(permute(simulation.cos.is_deadlock_periodic(:,3,:),[1,3,2]))
+%%
+sim_dlk = simulation;
+sim_dlk.cos = sim_dlk.cos.setParam("deadlock_stepwith",256);
+sim_dlk.cos = sim_dlk.cos.setParam("periodic_coeff_threshold",0.2);
 
+sim_dlk.cos.peakVariancePlot(32);
+sim_dlk.cos.peakPeriodicPlot(32);
+
+sim_dlk.cos.is_deadlock_variance(:,:,:) = 0;
+sim_dlk.cos.is_deadlock_periodic(:,:,:) = 0;
+
+for t = 1:sim_dlk.param.Nt
+    clc
+    disp(string(t)+"/"+string(sim_dlk.param.Nt));
+    sim_dlk.cos = sim_dlk.cos.judgeDeadlockWithPeriodic(t);
+end
+
+figure
+subplot(6,1,1)
+imagesc(permute(sim_dlk.cos.is_deadlock_variance(:,1,:),[1,3,2]))
+subplot(6,1,2)
+imagesc(permute(sim_dlk.cos.is_deadlock_variance(:,2,:),[1,3,2]))
+subplot(6,1,3)
+imagesc(permute(sim_dlk.cos.is_deadlock_variance(:,3,:),[1,3,2]))
+subplot(6,1,4)
+imagesc(permute(sim_dlk.cos.is_deadlock_periodic(:,1,:),[1,3,2]))
+subplot(6,1,5)
+imagesc(permute(sim_dlk.cos.is_deadlock_periodic(:,2,:),[1,3,2]))
+subplot(6,1,6)
+imagesc(permute(sim_dlk.cos.is_deadlock_periodic(:,3,:),[1,3,2]))
+
+figure
+subplot(2,1,1)
+imagesc(permute(prod(sim_dlk.cos.is_deadlock_variance(:,:,:),2),[1,3,2]))
+subplot(2,1,2)
+imagesc(permute(sum(sim_dlk.cos.is_deadlock_periodic(:,:,:),2),[1,3,2])>0)
+
+%%
  
 % figure
 % subplot(2,2,1)
